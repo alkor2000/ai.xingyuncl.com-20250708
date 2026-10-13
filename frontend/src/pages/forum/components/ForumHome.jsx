@@ -10,7 +10,7 @@
 
 import React from 'react';
 import {
-  Card, Row, Col, Typography, Space, Tag, Button, Empty, Spin, Badge, Tooltip
+  Card, Row, Col, Typography, Space, Tag, Button, Empty, Spin, Badge, Tooltip, Alert
 } from 'antd';
 import {
   PlusOutlined, CommentOutlined,
@@ -46,6 +46,9 @@ const BOARD_EMOJI_MAP = {
 const ForumHome = ({
   boards,
   boardsLoading,
+  boardsLoaded,
+  boardsError,
+  onRetryBoards,
   hotPosts,
   unreadCount,
   onBoardClick,
@@ -56,6 +59,8 @@ const ForumHome = ({
   onNotifications
 }) => {
   const { t } = useTranslation();
+  const boardsPending = boardsLoading || !boardsLoaded;
+  const canCreatePost = !boardsPending && !boardsError && boards.some(b => b.is_active === true || Number(b.is_active) === 1);
 
   /** 处理帖子点击 - 锁定帖不可进入 */
   const handlePostClick = (post) => {
@@ -90,7 +95,7 @@ const ForumHome = ({
           <Button icon={<UserOutlined />} onClick={onMyPosts}>
             {t('forum.myPosts.title')}
           </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={onNewPost}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={onNewPost} disabled={!canCreatePost}>
             {t('forum.post.new')}
           </Button>
         </Space>
@@ -104,10 +109,12 @@ const ForumHome = ({
           </Title>
         </div>
 
-        {boardsLoading ? (
+        {boardsPending ? (
           <div className="loading-center"><Spin /></div>
-        ) : boards.length === 0 ? (
-          <Empty description={t('forum.board.empty')} />
+        ) : boardsError || boards.length === 0 ? (
+          <Alert showIcon type={boardsError ? 'error' : 'info'}
+            message={t(boardsError ? `forum.board.${boardsError}` : 'forum.board.unavailable')}
+            action={<Button size="small" onClick={onRetryBoards}>{t('forum.board.retry')}</Button>} />
         ) : (
           <Row gutter={[16, 16]}>
             {boards.map(board => {

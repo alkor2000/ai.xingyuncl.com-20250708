@@ -7,7 +7,7 @@
  */
 
 import React, { useState } from 'react';
-import { Typography, Input, Select, Button, Space, Upload, message, Card } from 'antd';
+import { Typography, Input, Select, Button, Space, Upload, message, Card, Alert } from 'antd';
 import { ArrowLeftOutlined, PictureOutlined, PaperClipOutlined, SendOutlined, DeleteOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import useForumStore from '../../../stores/forumStore';
@@ -17,7 +17,7 @@ const { TextArea } = Input;
 
 const PostEditor = ({ boards, defaultBoardId, editPost, onBack, onSuccess }) => {
   const { t } = useTranslation();
-  const { createPost, updatePost, uploadImages, uploadFiles, deleteAttachment } = useForumStore();
+  const { createPost, updatePost, uploadImages, uploadFiles, deleteAttachment, boardsLoading, boardsLoaded, boardsError, fetchBoards } = useForumStore();
 
   const isEditing = !!editPost;
   const [title, setTitle] = useState(editPost?.title || '');
@@ -29,6 +29,10 @@ const PostEditor = ({ boards, defaultBoardId, editPost, onBack, onSuccess }) => 
   const [fileUploading, setFileUploading] = useState(false);
   const [uploadedImages, setUploadedImages] = useState([]);
   const [uploadedFiles, setUploadedFiles] = useState([]);
+
+  const availableBoards = boards.filter(b => b.is_active === true || Number(b.is_active) === 1);
+  const boardsPending = boardsLoading || !boardsLoaded;
+  const boardUnavailable = !isEditing && (boardsPending || !!boardsError || !availableBoards.some(b => b.id === boardId));
 
   /* 图片上传 */
   const handleImageUpload = async (info) => {
@@ -84,7 +88,7 @@ const PostEditor = ({ boards, defaultBoardId, editPost, onBack, onSuccess }) => 
   const handleSubmit = async () => {
     if (!title.trim()) return message.warning(t('forum.post.form.titleRequired'));
     if (!content.trim()) return message.warning(t('forum.post.form.contentRequired'));
-    if (!isEditing && !boardId) return message.warning(t('forum.post.form.boardRequired'));
+    if (boardUnavailable) return message.warning(t('forum.post.form.boardRequired'));
 
     setSubmitting(true);
     try {
@@ -111,8 +115,16 @@ const PostEditor = ({ boards, defaultBoardId, editPost, onBack, onSuccess }) => 
         {!isEditing && (
           <div className="editor-field">
             <Text strong>{t('forum.post.form.boardLabel')}</Text>
-            <Select value={boardId} onChange={setBoardId} placeholder={t('forum.post.form.boardRequired')} style={{ width: '100%', marginTop: 8 }}
-              options={boards.filter(b => b.is_active).map(b => ({ label: b.name, value: b.id }))} />
+            <Select value={availableBoards.some(b => b.id === boardId) ? boardId : null} onChange={setBoardId}
+              aria-label={t('forum.post.form.boardLabel')} loading={boardsPending}
+              disabled={boardsPending || !!boardsError || availableBoards.length === 0}
+              placeholder={t(boardsPending ? 'forum.board.loading' : 'forum.post.form.boardRequired')} style={{ width: '100%', marginTop: 8 }}
+              options={availableBoards.map(b => ({ label: b.name, value: b.id }))} />
+            {!boardsPending && (boardsError || availableBoards.length === 0) && (
+              <Alert style={{ marginTop: 12 }} showIcon type={boardsError ? 'error' : 'info'}
+                message={t(boardsError ? `forum.board.${boardsError}` : 'forum.board.unavailable')}
+                action={<Button size="small" onClick={fetchBoards}>{t('forum.board.retry')}</Button>} />
+            )}
           </div>
         )}
 
@@ -170,7 +182,7 @@ const PostEditor = ({ boards, defaultBoardId, editPost, onBack, onSuccess }) => 
         {/* 提交按钮 */}
         <div className="editor-actions">
           <Button onClick={onBack}>{t('forum.post.form.cancel')}</Button>
-          <Button type="primary" icon={<SendOutlined />} onClick={handleSubmit} loading={submitting}>{t('forum.post.form.submit')}</Button>
+          <Button type="primary" icon={<SendOutlined />} onClick={handleSubmit} loading={submitting} disabled={boardUnavailable}>{t('forum.post.form.submit')}</Button>
         </div>
       </Card>
     </div>

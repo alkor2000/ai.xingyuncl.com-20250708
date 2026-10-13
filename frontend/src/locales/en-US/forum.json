@@ -6,6 +6,11 @@
     "backToForum": "Back to Forum",
 
     "board": {
+      "loading": "Loading boards",
+      "unavailable": "No boards are available for posting. Ask an administrator about access.",
+      "loadFailed": "Could not load boards. Please try again.",
+      "forbidden": "You cannot access forum boards right now. Contact an administrator.",
+      "retry": "Reload",
       "title": "Boards",
       "all": "All Boards",
       "posts": "Posts",

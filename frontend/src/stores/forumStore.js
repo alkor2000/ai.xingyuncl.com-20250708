@@ -23,6 +23,7 @@ import apiClient from '../utils/api';
 import i18n from '../utils/i18n';
 
 let notificationRequestId = 0;
+let boardsRequestId = 0;
 
 const useForumStore = create((set, get) => ({
 
@@ -31,6 +32,8 @@ const useForumStore = create((set, get) => ({
    * ================================================================ */
   boards: [],
   boardsLoading: false,
+  boardsLoaded: false,
+  boardsError: null,
   currentBoard: null,
   posts: [],
   postsLoading: false,
@@ -66,14 +69,18 @@ const useForumStore = create((set, get) => ({
    * 版块
    * ================================================================ */
   fetchBoards: async () => {
-    set({ boardsLoading: true });
+    const requestId = ++boardsRequestId;
+    set({ boards: [], boardsLoading: true, boardsError: null });
     try {
       const res = await apiClient.get('/forum/boards');
-      if (res.data.success) set({ boards: res.data.data || [], boardsLoading: false });
-      else set({ boardsLoading: false });
+      if (!res.data.success || !Array.isArray(res.data.data)) throw new Error('Invalid boards response');
+      if (requestId === boardsRequestId) set({ boards: res.data.data });
     } catch (error) {
-      console.error('Failed to fetch boards:', error);
-      set({ boardsLoading: false });
+      if (requestId === boardsRequestId) {
+        set({ boards: [], boardsError: error.response?.status === 403 ? 'forbidden' : 'loadFailed' });
+      }
+    } finally {
+      if (requestId === boardsRequestId) set({ boardsLoading: false, boardsLoaded: true });
     }
   },
 
@@ -512,8 +519,9 @@ const useForumStore = create((set, get) => ({
    * 重置
    * ================================================================ */
   reset: () => {
+    ++boardsRequestId;
     set({
-      boards: [], currentBoard: null,
+      boards: [], boardsLoading: false, boardsLoaded: false, boardsError: null, currentBoard: null,
       posts: [], postsPagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
       isBoardModerator: false,
       currentPost: null, replies: [],

@@ -6,6 +6,11 @@
     "backToForum": "返回论坛",
 
     "board": {
+      "loading": "正在加载版块",
+      "unavailable": "暂无可发帖的版块，请联系管理员确认开放范围。",
+      "loadFailed": "版块加载失败，请重试。",
+      "forbidden": "暂时无法访问论坛版块，请联系管理员。",
+      "retry": "重新加载",
       "title": "版块",
       "all": "全部版块",
       "posts": "帖子",

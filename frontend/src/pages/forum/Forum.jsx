@@ -39,7 +39,7 @@ const Forum = () => {
 
   /* Store */
   const {
-    boards, boardsLoading, fetchBoards,
+    boards, boardsLoading, boardsLoaded, boardsError, fetchBoards,
     hotPosts, fetchHotPosts,
     fetchUnreadCount, unreadCount,
     fetchBoardPosts, postsSort
@@ -108,6 +108,9 @@ const Forum = () => {
           <ForumHome
             boards={boards}
             boardsLoading={boardsLoading}
+            boardsLoaded={boardsLoaded}
+            boardsError={boardsError}
+            onRetryBoards={fetchBoards}
             hotPosts={hotPosts}
             unreadCount={unreadCount}
             onBoardClick={(board) => navigate('board', { boardId: board.id, boardName: board.name })}

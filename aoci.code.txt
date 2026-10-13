@@ -589,7 +589,7 @@ calendar.json[FL2S]: F:L·英文日历文案(模块已停用) | R:code:frontend/
 chat.json[FL5L]: F:T·英文对话扁平文案：消息/思考/模型/公告、画布/模板/格式导出、讨论整理、手机导航与工具抽屉、两条成果交接、生产选段下载及错误提示 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/chat.json,code:frontend/src/components/chat/ArtifactHandoff.jsx | A:- | S:chat.handoff.* 是正式保存入口的文案(72 键)，与开发交接那套并存；chat.mobile.* 同时用作无障碍标签，改一边要同时改另一边的语言包
 common.json[FL5M]: F:英文通用界面文案，包含站点、首页默认欢迎语、按钮、导航、状态、工作台与导图操作 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/common.json | A:nav.returnPortal,landing.title,landing.description,landing.frameTitle | S:同名键按index展开顺序由后面的admin覆盖
 errors.json[FL3T]: F:C·英文错误与404文案：error.*共8键 | R:code:frontend/src/locales/en-US/index.js | A:- | S:-
-forum.json[FL4M]: F:英文论坛嵌套文案forum.*：版块、帖子、回复、管理与通知筛选、单条及全部已读、查看帖子和加载重试提示 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/forum.json | A:- | S:-
+forum.json[FL4M]: F:英文论坛文案：版块、发帖回复、管理、通知筛选和已读；区分版块加载中、无可发帖版块、加载失败、权限拒绝及重新加载提示 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/forum.json | A:- | S:-
 htmlEditor.json[FL4M]: F:H·英文HTML编辑器文案：htmlEditor.*扁平键，含p09教学任务作品、交作业、另一次作业提示与每个固定拒绝码一句话 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/htmlEditor.json | A:- | S:中英两侧键必须成对；不写默认已交，未知不写没交上；挡住误交时要给一条能走的下一步
 image.json[FL4S]: F:I·英文图像生成文案：image.*扁平键，含新版工作台studio.*与写提示词assist.* | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/image.json | A:- | S:与中文同名键一一对应(各180键)，只加一边页面会直接显示键名
 index.js[FL6T]: F:C·英文语言包入口：导入18个命名空间json并按固定顺序展开为单一translation对象(aiLab追加在末尾) | R:code:frontend/src/utils/i18n.js,code:frontend/src/locales/zh-CN/index.js | A:- | S:导入清单与展开顺序必须与zh-CN/index.js完全一致，否则缺失命名空间会回退中文或同名键取值错位；新语言包只能追加到末尾
@@ -610,7 +610,7 @@ calendar.json[FL2S]: F:L·中文日历文案(模块已停用) | R:code:frontend/
 chat.json[FL5L]: F:对话中文语言资源，覆盖消息模型、思考与上下文词元、画布导出、公文模板、讨论整理、手机导航与工具抽屉，以及开发与正式两条成果交接提示 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/chat.json,code:frontend/src/components/chat/ArtifactHandoff.jsx | A:- | S:文件格式、快捷键、模型名和协议参数维持技术标识；chat.handoff.* 是正式保存入口的 72 个键；chat.mobile.* 同时用作无障碍标签，两侧语言包必须同步
 common.json[FL5M]: F:中文通用语言资源，提供中文平台名及默认首页欢迎语、按钮状态导航、工作台词元统计和导图操作提示 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/common.json | A:nav.returnPortal,landing.title,landing.description,landing.frameTitle | S:同名键可被后展开admin覆盖；动态插值保留原键
 errors.json[FL3T]: F:C·中文错误与404文案：error.*共8键 | R:code:frontend/src/locales/zh-CN/index.js | A:- | S:-
-forum.json[FL4M]: F:中文论坛嵌套文案forum.*：版块、帖子、回复、管理与通知筛选、单条及全部已读、查看帖子和加载重试提示 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/forum.json | A:- | S:-
+forum.json[FL4M]: F:中文论坛文案：版块、发帖回复、管理、通知筛选和已读；区分版块加载中、无可发帖版块、加载失败、权限拒绝及重新加载提示 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/forum.json | A:- | S:-
 htmlEditor.json[FL4M]: F:H·网页编辑器中文文案：项目管理、编辑预览、保存与永久链接，以及p09教学任务作品、交作业、另一次作业提示与每个固定拒绝码一句话 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/htmlEditor.json | A:- | S:中英两侧键必须成对；不写默认已交，未知不写没交上；挡住误交时要给一条能走的下一步
 image.json[FL4S]: F:I·中文图像生成文案：image.*扁平键，含新版工作台studio.*与写提示词assist.* | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/image.json | A:- | S:与英文同名键一一对应(各180键)，只加一边页面会直接显示键名
 index.js[FL6T]: F:C·中文语言包入口(回退语言)：导入18个命名空间json并按既有顺序展开(aiLab追加在末尾) | R:code:frontend/src/utils/i18n.js,code:frontend/src/locales/en-US/index.js | A:- | S:展开顺序是既有行为不可调整(admin覆盖common的14个同名键与后端语义一致)；新增语言包须两侧同步且只追加末尾
@@ -691,16 +691,16 @@ Dashboard.less[CU2L]: F:C·工作台样式：欢迎区、模块卡片、积分�
 NotFound.jsx[EU3T]: F:C·404兜底页：antd Result，返回按钮跳/dashboard | R:code:frontend/src/App.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/forum/===
-Forum.jsx[AB6S]: F:论坛主页内部视图状态机：主页、版块、帖子、编辑、我的帖子、收藏及通知，维护回退历史；初始化取版块热帖未读数，返回列表时刷新 | R:code:frontend/src/stores/forumStore.js,code:frontend/src/pages/forum/components/ForumHome.jsx,code:frontend/src/pages/forum/components/PostDetail.jsx,code:frontend/src/pages/forum/components/NotificationsView.jsx | A:- | S:-
+Forum.jsx[AB6S]: F:论坛内部视图与回退历史：主页、版块、详情、发帖编辑、我的帖子、收藏和通知；初始化加载并在回退时刷新列表，将版块加载结果和重试传给主页 | R:code:frontend/src/stores/forumStore.js,code:frontend/src/pages/forum/components/ForumHome.jsx,code:frontend/src/pages/forum/components/PostEditor.jsx | A:- | S:-
 Forum.less[CU2L]: F:O·论坛样式：首页版块卡片、热帖列表、帖子列表、详情与回复、编辑器 | R:code:frontend/src/pages/forum/Forum.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/forum/components/===
 BoardPostList.jsx[AU5M]: F:O·版块帖子列表：排序Segmented+分页，置顶/锁定标记，锁定帖不可进入，版主(store.isBoardModerator)可置顶/隐藏/锁定 | R:code:frontend/src/stores/forumStore.js,code:frontend/src/pages/forum/Forum.jsx | A:- | S:-
 FavoritesView.jsx[AU3T]: F:O·我的收藏列表视图，fetchFavorites分页 | R:code:frontend/src/stores/forumStore.js | A:- | S:-
-ForumHome.jsx[AU5M]: F:O·论坛首页：版块卡片(Emoji图标映射、版主标识、未读数徽标)与热帖推荐，入口按钮回调由Forum传入 | R:code:frontend/src/pages/forum/Forum.jsx | A:- | S:模块顶层dayjs.locale('zh-cn')设全局locale，违反实例级locale规约
+ForumHome.jsx[AU5M]: F:论坛首页版块卡片、版主标记、未读徽标、热帖和导航；版块加载或失败时禁用发帖，无可见版块提示联系管理员，错误与空态均可重新加载 | R:code:frontend/src/pages/forum/Forum.jsx | A:- | S:模块顶层dayjs.locale('zh-cn')仍改变全局locale；可发帖判据仅限服务端已返回的激活版块
 MyPostsView.jsx[AU3T]: F:O·我的帖子列表视图，fetchMyPosts分页 | R:code:frontend/src/stores/forumStore.js | A:- | S:-
 PostDetail.jsx[AU6L]: F:O·帖子详情：内容与附件(作者或版主可删)、点赞/收藏、回复列表分页与楼层回复、版主置顶/隐藏/锁定与隐藏回复，相对时间用实例级dayjs locale | R:code:frontend/src/stores/forumStore.js,code:frontend/src/pages/forum/Forum.jsx,code:backend/src/services/forum/ForumModeratorService.js | A:- | S:版主权限只信后端返回的post.is_moderator，不按前端role判断
-PostEditor.jsx[AU5S]: F:O·发帖/编辑帖子：标题/版块/内容，图片与文件上传经forumStore得attachment ids随帖提交，移除附件调后端删除 | R:code:frontend/src/stores/forumStore.js,code:frontend/src/pages/forum/Forum.jsx | A:- | S:-
+PostEditor.jsx[AU5S]: F:帖子新建与编辑表单、图片文件上传及附件删除；新建需选列表内激活版块，加载失败或无可用版块显示原因并可重试，禁止无效提交 | R:code:frontend/src/stores/forumStore.js,code:frontend/src/pages/forum/Forum.jsx | A:- | S:重试只刷新版块，不重置本地标题正文和附件；编辑已有帖子不依赖版块列表准入
 NotificationsView.jsx[AU5T]: F:论坛通知页：类型筛选、20条分页、发送者时间与帖子信息、未读标识、单条或全部已读、查看帖子及失败重试 | R:code:frontend/src/stores/forumStore.js,code:frontend/src/pages/forum/Forum.jsx | A:- | S:查看帖子前等待已读成功；重入保留分页筛选；已知通知类型取语言包，未知类型原样显示
 
 ===/home/hanying/ai-platform/frontend/src/pages/htmlEditor/===
@@ -798,7 +798,7 @@ analyticsStore.js[AD5S]: F:C·BI分析store：筛选条件、GET /admin/analytic
 authStore.js[AI9L]: F:A·认证store(persist键auth-storage)：密码/邮箱码/邮箱密码/Identity/学校学生五种登录，logout清系统配置与chat状态并跳转，/auth/me、资料/改密/积分历史、注册、刷新Token、hasPermission/hasRole、initializeAuth | R:code:frontend/src/utils/api.js,code:frontend/src/services/tokenRefreshService.js,code:frontend/src/stores/systemConfigStore.js,code:frontend/src/stores/chatStore.js,code:backend/src/routes/auth.js,code:backend/src/routes/studentEntry.js | A:- | S:持久化仅user/permissions/accessToken/refreshToken/tokenExpiresAt/isAuthenticated；rehydrate时若有token自动initializeAuth(过期则先刷新)；Identity登录经/auth/identity/login/consume一次性消费handoff；学校学生登录经/auth/sso/consume，该入口不发refresh令牌，所以刷新服务对它无事可做；开发环境暴露window.useAuthStore；静态import chatStore不得反向引用
 calendarStore.js[AB5L]: F:L·日历store(模块已停用)：事项/月统计/分类/背景知识/AI分析(执行、历史)/设置/概览，模型取/chat/models，配置取/admin/calendar/config | R:code:frontend/src/utils/api.js,code:backend/src/routes/calendar.js,code:frontend/src/pages/calendar/Calendar.jsx | A:- | S:-
 chatStore.js[AB9L]: F:T·对话store：会话列表/切换(缓存滚动与草稿)、非流式sendMessage(图像模型300s超时)与SSE流式sendStreamMessage(90s无活动超时，心跳刷新)、options.outputFormat传output_format、停止、删除消息对、清空、模型/提示词/知识组合、积分校验 | R:code:frontend/src/utils/api.js,code:frontend/src/utils/i18n.js,code:backend/src/routes/chat.js,code:backend/src/controllers/ChatControllerRefactored.js,code:frontend/src/pages/chat/Chat.jsx | A:- | S:流式请求POST /chat/conversations/:id/messages带stream:true，init事件回传真实user_message与ai_message_id替换临时消息；超时判定以lastActivityTime为准，心跳注释行也算活动；isImageGenerationModel须与后端ImageGenerationService对齐
-forumStore.js[AB6L]: F:论坛状态仓：版块帖子回复、热帖、点赞收藏、我的帖子、附件、通知类型分页与已读、用户搜索，版主操作和后台版块/版主/统计 | R:code:frontend/src/utils/api.js,code:backend/src/routes/forum.js,code:frontend/src/pages/forum/Forum.jsx,code:frontend/src/pages/forum/components/NotificationsView.jsx | A:- | S:通知请求序号只允许最新响应更新列表及加载态；单条已读成功后才扣未读数且同条不重复扣；全部已读后按现有查询刷新；通知失败保留错误状态供重试
+forumStore.js[AB6L]: F:论坛版块、帖子回复、点赞收藏、附件、通知与管理状态仓；版块列表校验成功数组，清除旧选项，分离加载完成、权限错误和其他失败，支持重试 | R:code:frontend/src/utils/api.js,code:backend/src/routes/forum.js,code:frontend/src/pages/forum/Forum.jsx,code:frontend/src/pages/forum/components/NotificationsView.jsx | A:- | S:版块请求和reset按序号隔离，过期响应不得恢复旧权限选项；通知已读成功才扣未读数，全部已读后按原查询刷新
 htmlEditorStore.js[AB6M]: F:H·HTML编辑器store：项目CRUD、页面列表(limit=500避免丢页)与加载更多、页面CRUD、发布切换、模板 | R:code:frontend/src/utils/api.js,code:backend/src/routes/htmlEditor.js,code:frontend/src/pages/htmlEditor/HtmlEditor.jsx | A:- | S:-
 imageStore.js[AB7L]: F:I·图像store：模型列表、生成(同步模型直接返回；Midjourney异步任务2s轮询/image/midjourney/task/:id，失败退避×2，成功后延2s刷新历史)、MJ动作、历史/公开图库/收藏/公开/删除/批量删除、统计、关键词 | R:code:frontend/src/utils/api.js,code:backend/src/routes/image.js,code:frontend/src/pages/image/index.jsx | A:- | S:processingTasks与pollingTimers按taskId存于store，页面卸载需clearPollingTimer；cleanupFailedTasks清理僵死任务
 knowledgeStore.js[AB6M]: F:K·知识模块store：模块CRUD与分类、组合CRUD与复制 | R:code:frontend/src/utils/api.js,code:backend/src/routes/knowledgeRoutes.js,code:frontend/src/pages/knowledge/KnowledgeBase.jsx | A:- | S:-
