@@ -91,8 +91,12 @@ migrate: ## 在生产库执行待执行的 knex 迁移（先备份门，再 migr
 	ssh -n $(SSH_HOST) '$(NVM); cd $(REMOTE_DIR)/backend && npx knex migrate:latest && npx knex migrate:status'
 
 .PHONY: deploy-docker
-deploy-docker: ## 发布到 Docker 站点 ai.pkuailab.com（先 make deploy；bundle 传码 → 构建镜像 → 备份库 → 迁移 → 切换 → 健康检查）
+deploy-docker: ## 发布到 Docker 站点 ai.pkuailab.com（先 make deploy；bundle 传码 → 构建镜像 → 备份库 → 迁移 → 切换 → 健康检查；ARGS=--prebuilt=<包目录> 则只加载 make build-images 的镜像包，不在站点构建）
 	$(ROOT)/dev/deploy-docker.sh $(ARGS)
+
+.PHONY: build-images
+build-images: ## 在构建主机（默认 ssh practice）为 Docker 站点构建 backend/frontend 镜像并打包取回本机（ARGS=--precheck 只做只读前检）
+	$(ROOT)/dev/build-images.sh $(ARGS)
 
 .PHONY: status-docker
 status-docker: ## 查看 Docker 站点 git 与容器状态
