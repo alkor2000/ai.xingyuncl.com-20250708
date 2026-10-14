@@ -140,9 +140,14 @@ if [ "$MODE" = prebuilt ]; then
     echo "❌ 服务器 Docker 平台 $REMOTE_PLATFORM 与镜像包平台 $IMAGE_PLATFORM 不同（或读不到）：错架构不加载。"; exit 1
   fi
   # 现场构建会把服务器检出里的未跟踪文件（如门户页 frontend/public/www/）COPY 进镜像，预构建镜像里没有：先列出来，由人决定提交进仓或改挂载，不让它们在切换时消失。
-  if ! UNTRACKED=$($SSH bash -s -- untracked-context "$REMOTE_DIR" < "$PREFLIGHT" 2>&1); then
-    echo "❌ 服务器检出里有会被构建进镜像的未跟踪文件，预构建镜像不含它们，中止："; echo "$UNTRACKED" | sed 's/^/    /'
-    echo "   处理办法：把这些内容提交进仓库后重新 make build-images，或改成 compose 挂载；不要让它们随切换消失。"; exit 1
+  # 判定用的"保留合同"是本地 HEAD（即将发布的那份）docker-compose.yml 里以 ./ 挂载的宿主目录，而不是服务器上传码前的旧 compose：
+  # 首次加挂载的升级时旧 compose 还没有那一行，用它判定会把自己拦住；而本地 HEAD 的 compose 已在本地核过，就是切换后真正生效的那份。
+  TARGET_MOUNTS=$(git show HEAD:docker-compose.yml | grep -oE '^\s*-\s*\./[A-Za-z0-9._/-]+:' | sed -E 's/^\s*-\s*\.\///; s/:$//; s/\/+$//' | paste -sd, -)
+  [ -n "$TARGET_MOUNTS" ] || TARGET_MOUNTS=-
+  if ! UNTRACKED=$($SSH bash -s -- untracked-context "$REMOTE_DIR" "$TARGET_MOUNTS" < "$PREFLIGHT" 2>&1); then
+    echo "❌ 服务器检出里有会被构建进镜像、且目标 compose 没有挂载的未跟踪文件，预构建镜像不含它们，中止："; echo "$UNTRACKED" | sed 's/^/    /'
+    echo "   目标 compose（本地 HEAD）挂载的宿主目录：${TARGET_MOUNTS}"
+    echo "   处理办法：把这些内容提交进仓库后重新 make build-images，或在 compose 里改成挂载；不要让它们随切换消失。"; exit 1
   fi
 fi
 echo ""
@@ -159,6 +164,7 @@ if [ "$MODE" = prebuilt ]; then
   echo "  镜像来源:    预构建包 $TASK（$PKG_DIR，$(( TAR_SIZE / 1048576 )) MiB，sha256 ${TAR_SHA256:0:16}…）"
   echo "               backend ${BACKEND_IMAGE_ID:0:19}… ($(( BACKEND_IMAGE_SIZE / 1048576 )) MiB)  frontend ${FRONTEND_IMAGE_ID:0:19}… ($(( FRONTEND_IMAGE_SIZE / 1048576 )) MiB)  平台 $IMAGE_PLATFORM = 服务器 $REMOTE_PLATFORM"
   echo "  资源门:      磁盘 ≥ ${GATE_FREE_GIB} GiB（包 + 两镜像 + ${PREBUILT_DISK_MARGIN_GIB} GiB 余量）、可用内存 ≥ ${GATE_AVAILABLE_MIB} MiB（运行余量）、inode ≥ ${MIN_FREE_INODES}；服务器只加载、不构建"
+  echo "  保留合同:    服务器未跟踪的构建输入已按目标 compose 的挂载判定（${TARGET_MOUNTS}），无遗漏"
 else
   echo "  镜像来源:    服务器现场 docker compose build（资源门 ≥ ${GATE_FREE_GIB} GiB、≥ ${GATE_AVAILABLE_MIB} MiB、≥ ${MIN_FREE_INODES} inode）"
 fi

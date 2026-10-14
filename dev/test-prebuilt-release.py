@@ -48,6 +48,21 @@ def write_package(pkg, commit, task="v-abcdef0-20261014_120000", domain="ai.pkua
     return pkg
 
 
+COMPOSE_WITH_PORTAL_MOUNT = ("services:\n  frontend:\n    volumes:\n      - ${SSL_CERT_PATH:-/etc/letsencrypt}:/etc/letsencrypt:ro\n"
+                             "      - ./storage/uploads:/app/storage/uploads:ro\n      - ./certbot:/var/www/certbot:ro\n"
+                             "      - ./frontend/public/www:/usr/share/nginx/html/www:ro\n")
+COMPOSE_WITHOUT_PORTAL_MOUNT = COMPOSE_WITH_PORTAL_MOUNT.replace("      - ./frontend/public/www:/usr/share/nginx/html/www:ro\n", "")
+
+
+def commit_pushed(repo, path, text, message):
+    """Replace one file, commit on main and push, so the clean/pushed local checks still pass; returns the new HEAD."""
+    (repo / path).write_text(text)
+    subprocess.run(["git", "add", path], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", message], cwd=repo, check=True)
+    subprocess.run(["git", "push", "-q", "origin", "main"], cwd=repo, check=True)
+    return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+
+
 def git_repo_with_origin(base):
     """A clean main checkout whose HEAD is pushed to a bare origin; returns (repo, old_sha, new_sha)."""
     repo = base / "repo"
@@ -60,7 +75,7 @@ def git_repo_with_origin(base):
     (repo / "backend").mkdir(); (repo / "frontend").mkdir()
     (repo / "backend" / "package-lock.json").write_text("{}\n")
     (repo / "frontend" / "package-lock.json").write_text("{}\n")
-    (repo / "docker-compose.yml").write_text("services: {}\n")
+    (repo / "docker-compose.yml").write_text(COMPOSE_WITH_PORTAL_MOUNT)
     (repo / ".dockerignore").write_text("node_modules/\n")
     run = lambda *a: subprocess.run(a, cwd=repo, check=True, capture_output=True)
     run("git", "init", "-q", "-b", "main")
@@ -158,6 +173,28 @@ esac
         self.assertEqual(copied.returncode, 1)
         self.assertEqual(sorted(copied.stdout.split()), ["docker/nginx/extra.conf", "tools/database-upgrade/patch.js"])
 
+    def test_untracked_context_explicit_contract_replaces_the_checkouts_old_compose(self):
+        """First upgrade: the server still has the old compose (no portal mount) when the probe runs before code transfer."""
+        repo = Path(self.temp.name) / "checkout"
+        (repo / "frontend" / "public" / "www").mkdir(parents=True)
+        (repo / "frontend" / "src").mkdir(parents=True); (repo / "frontend" / "src" / "a.js").write_text("a")
+        (repo / "docker-compose.yml").write_text("services:\n  frontend:\n    volumes:\n      - ./storage/uploads:/app/storage/uploads:ro\n")
+        run = lambda *a: subprocess.run(a, cwd=repo, check=True, capture_output=True)
+        run("git", "init", "-q"); run("git", "config", "user.email", "t@e.invalid"); run("git", "config", "user.name", "t")
+        run("git", "add", "-A"); run("git", "commit", "-qm", "old compose without the portal mount")
+        (repo / "frontend" / "public" / "www" / "index.html").write_text("portal")
+        probe = lambda *extra: subprocess.run(["bash", str(PREFLIGHT), "untracked-context", str(repo), *extra], text=True, capture_output=True)
+        self.assertEqual(probe().returncode, 1, "reading the checkout's own old compose still refuses")
+        contract = probe("storage/uploads,certbot,frontend/public/www")
+        self.assertEqual(contract.returncode, 0, contract.stdout + contract.stderr)
+        self.assertEqual(probe("./frontend/public/www/").returncode, 0, "leading ./ and trailing / are tolerated")
+        (repo / "docker" / "nginx").mkdir(parents=True); (repo / "docker" / "nginx" / "extra.conf").write_text("x")
+        partial = probe("frontend/public/www")
+        self.assertEqual(partial.returncode, 1); self.assertEqual(partial.stdout.split(), ["docker/nginx/extra.conf"], "content the target compose does not mount is still refused")
+        none = probe("-")
+        self.assertEqual(none.returncode, 1); self.assertIn("frontend/public/www/index.html", none.stdout)
+        self.assertEqual(probe("bad;rm -rf").returncode, 2)
+
 
 class LockTests(unittest.TestCase):
     def setUp(self):
@@ -242,7 +279,14 @@ case "$*" in
   *"bash -s"*) cat >/dev/null
     if [[ "$*" == *" runtime "* ]]; then echo "${FAKE_RUNTIME:-STALE backend image=old}"; exit 0; fi
     if [[ "$*" == *" arch" ]]; then echo "${FAKE_REMOTE_PLATFORM-linux/amd64}"; exit 0; fi
-    if [[ "$*" == *" untracked-context "* ]]; then if [ -n "${FAKE_UNTRACKED:-}" ]; then echo "$FAKE_UNTRACKED"; exit 1; fi; echo "no untracked build-context files"; exit 0; fi
+    if [[ "$*" == *" untracked-context "* ]]; then
+      contract=$(echo "$*" | sed -n 's/.* untracked-context [^ ]* \\([^ ]*\\).*/\\1/p'); echo "contract=$contract" >> "$TRACE"
+      if [ -n "${FAKE_UNTRACKED:-}" ]; then
+        for m in ${contract//,/ }; do [ "$m" = - ] && continue; case "$FAKE_UNTRACKED" in "$m"/*) echo "no untracked build-context files"; exit 0;; esac; done
+        echo "$FAKE_UNTRACKED"; exit 1
+      fi
+      echo "no untracked build-context files"; exit 0
+    fi
     if [[ "$*" == *" acquire "* ]]; then if [ "${FAKE_LOCK_HELD:-0}" = 1 ]; then echo "release lock held: token=other" >&2; exit 3; fi; echo "lock acquired"; exit 0; fi
     if [[ "$*" == *" release "* ]]; then echo "lock released"; exit 0; fi
     if [[ "$*" == *" resources "* ]]; then if [ "${FAKE_RESOURCES:-ok}" = ok ]; then echo "resources ready: disk=1 bytes memory=1 bytes inodes=1"; exit 0; fi; echo "insufficient ${FAKE_RESOURCES} resources" >&2; exit 1; fi
@@ -276,7 +320,25 @@ esac
         self.assertNotEqual(self.deploy(FAKE_REMOTE_PLATFORM="").returncode, 0, "unknown platform must refuse too")
 
     def test_untracked_build_context_refuses_before_lock_and_transfer(self):
+        # HEAD's compose mounts the portal page, so content outside that contract is what gets refused
+        self.assertNotEqual(self.deploy(FAKE_UNTRACKED="docker/nginx/extra.conf").returncode, 0)
+        self.assertIn("docker/nginx/extra.conf", self.out)
+        self.assertIsNone(self.first(" acquire ")); self.assertIsNone(self.first("scp "))
+
+    def test_first_upgrade_judges_the_portal_page_by_the_target_compose_not_the_servers_old_one(self):
+        """Server checkout = old commit without the mount + untracked portal page; HEAD = compose with the mount.
+        The pre-transfer probe must receive HEAD's mounts and let the release proceed to the lock and transfer."""
+        result = self.deploy(FAKE_UNTRACKED="frontend/public/www/index.html")
+        self.assertIsNotNone(self.first("contract=storage/uploads,certbot,frontend/public/www"), self.lines)
+        self.assertIsNotNone(self.first(" acquire "), "the portal page is preserved by the target mount, so the release continues")
+        self.assertIsNotNone(self.first("images.tar.gz.part"))
+        self.assertIn("保留合同", self.out)
+        # and when HEAD's compose does NOT mount it, the same server state is refused before any lock or transfer
+        head = commit_pushed(self.repo, "docker-compose.yml", COMPOSE_WITHOUT_PORTAL_MOUNT, "drop the portal mount")
+        self.pkg = write_package(Path(self.temp.name) / "pkg2", head)
+        self.env["FAKE_LOCAL_SHA"] = head
         self.assertNotEqual(self.deploy(FAKE_UNTRACKED="frontend/public/www/index.html").returncode, 0)
+        self.assertIsNotNone(self.first("contract=storage/uploads,certbot"))
         self.assertIn("frontend/public/www/index.html", self.out)
         self.assertIsNone(self.first(" acquire ")); self.assertIsNone(self.first("scp "))
 
