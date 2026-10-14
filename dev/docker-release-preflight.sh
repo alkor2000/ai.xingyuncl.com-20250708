@@ -70,13 +70,19 @@ case "${1:-}" in
     echo "id=$id platform=$os/$(normalize_arch "$arch") size=$size customer_domain=${domain:--}"
     ;;
   untracked-context)
-    # 服务器检出里、会被 Dockerfile COPY 进镜像的未跟踪文件（如门户页 frontend/public/www/）：现场构建会把它们带进镜像，
-    # 预构建镜像里没有。列出来并以 exit 1 表示存在；.dockerignore 明确排除的那几类不算（近似，宁多勿漏）。
+    # 服务器检出里、会被两个 Dockerfile COPY 进镜像的未跟踪文件：现场构建会把它们带进镜像，预构建镜像里没有。
+    # 只看 Dockerfile 实际 COPY 的目录（backend/ frontend/ database/ tools/database-upgrade docker/scripts docker/nginx），
+    # .dockerignore 明确排除的那几类不算（近似，宁多勿漏）；docker-compose.yml 里以 ./ 开头挂载进容器的宿主目录也不算——
+    # 它们本来就由挂载提供（如门户页 frontend/public/www/），不随镜像来源改变而消失。列出来并以 exit 1 表示存在。
     dir="${2:?checkout dir required}"
     [ -d "$dir" ] || { echo "checkout dir missing" >&2; exit 2; }
-    list=$(git -C "$dir" status --porcelain --untracked-files=all -- backend frontend docker database tools 2>/dev/null \
+    mounted=$(grep -oE '^\s*-\s*\./[A-Za-z0-9._/-]+:' "$dir/docker-compose.yml" 2>/dev/null | sed -E 's/^\s*-\s*\.\///; s/:$//; s/\/+$//' || true)
+    list=$(git -C "$dir" status --porcelain --untracked-files=all -- backend frontend database tools/database-upgrade docker/scripts docker/nginx 2>/dev/null \
       | awk '$1=="??" {print $2}' \
       | grep -vE '(^|/)(node_modules|dist|build|logs|coverage|tmp|temp|__tests__)/|(^|/)\.env(\.|$)|\.(log|bak|backup|sh|test\.js|spec\.js|key|pem|crt)$|storage/(uploads|private)/' || true)
+    if [ -n "$mounted" ]; then
+      while IFS= read -r m; do [ -n "$m" ] && list=$(echo "$list" | grep -vE "^${m}(/|$)" || true); done <<< "$mounted"
+    fi
     if [ -n "$list" ]; then echo "$list"; exit 1; fi
     echo "no untracked build-context files"
     ;;

@@ -143,6 +143,20 @@ esac
         self.assertEqual(found.returncode, 1)
         self.assertIn("frontend/public/www/index.html", found.stdout)
         self.assertNotIn("frontend/dist/x.js", found.stdout)
+        # the exact untracked set seen on ai.pkuailab.com on 2026-10-14: only the portal page is build context
+        for stray in ("backup_www_index_20251014_184748.html", "docker/Dockerfile.frontend.backup_b", "reload-nginx-docker.sh"):
+            (repo / stray).parent.mkdir(parents=True, exist_ok=True); (repo / stray).write_text("x")
+        found = subprocess.run(["bash", str(PREFLIGHT), "untracked-context", str(repo)], text=True, capture_output=True)
+        self.assertEqual(found.stdout.split(), ["frontend/public/www/index.html"], "root files and docker/*.backup_b are never copied into an image")
+        # a directory the compose file bind-mounts into the container is provided by the mount, not the image
+        (repo / "docker-compose.yml").write_text("services:\n  frontend:\n    volumes:\n      - ./storage/uploads:/app/storage/uploads:ro\n      - ./frontend/public/www:/usr/share/nginx/html/www:ro\n")
+        mounted = subprocess.run(["bash", str(PREFLIGHT), "untracked-context", str(repo)], text=True, capture_output=True)
+        self.assertEqual(mounted.returncode, 0, mounted.stdout + mounted.stderr)
+        (repo / "docker" / "nginx").mkdir(parents=True); (repo / "docker" / "nginx" / "extra.conf").write_text("x")
+        (repo / "tools" / "database-upgrade").mkdir(parents=True); (repo / "tools" / "database-upgrade" / "patch.js").write_text("x")
+        copied = subprocess.run(["bash", str(PREFLIGHT), "untracked-context", str(repo)], text=True, capture_output=True)
+        self.assertEqual(copied.returncode, 1)
+        self.assertEqual(sorted(copied.stdout.split()), ["docker/nginx/extra.conf", "tools/database-upgrade/patch.js"])
 
 
 class LockTests(unittest.TestCase):

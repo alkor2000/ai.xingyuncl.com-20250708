@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-10-13T15:37:30Z",
+  "updated_at": "2026-10-14T09:29:32Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "25afc41dd55053a43da9dfaf5763b7850fe91065b8bc366521ac7036330e39a3",
-      "size": 390943,
-      "normalized_sha256": "25afc41dd55053a43da9dfaf5763b7850fe91065b8bc366521ac7036330e39a3"
+      "sha256": "563658f9fe0e8309dc04539eb93fe697f3e3da3fde40ed04df3c32e8ac812756",
+      "size": 391002,
+      "normalized_sha256": "563658f9fe0e8309dc04539eb93fe697f3e3da3fde40ed04df3c32e8ac812756"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2437,9 +2437,9 @@
       "normalized_sha256": "1905816993fe89f8bae9b7a207ac118dc936569bac2f00cfbe8dc606137b8c71"
     },
     "docker-compose.yml": {
-      "sha256": "0a9b2dcc3a1442283b969b1667e39cd28a64d67e245e6242128041fa9f70a649",
-      "size": 6275,
-      "normalized_sha256": "0a9b2dcc3a1442283b969b1667e39cd28a64d67e245e6242128041fa9f70a649"
+      "sha256": "8355b2c7b37cfefa55a72b0b2b9ff9ae0681404feaa27754a2b48451efa6f8f1",
+      "size": 6669,
+      "normalized_sha256": "8355b2c7b37cfefa55a72b0b2b9ff9ae0681404feaa27754a2b48451efa6f8f1"
     },
     "docker/Dockerfile.backend": {
       "sha256": "1c4b27c7c88611547ea9d8d7521989498f5ae801af7fba0e1aaa7e1a88ec1a2c",
