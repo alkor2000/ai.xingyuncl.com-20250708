@@ -9,6 +9,7 @@ import unittest
 HERE = Path(__file__).resolve().parent
 PREFLIGHT = HERE / "docker-release-preflight.sh"
 DEPLOY = HERE / "deploy-docker.sh"
+LOCK = HERE / "docker-release-lock.sh"
 
 
 def executable(path, body):
@@ -100,6 +101,7 @@ class ReleaseOrderTests(unittest.TestCase):
         (self.repo / "dev").mkdir()
         (self.repo / "dev" / "deploy-docker.sh").write_bytes(DEPLOY.read_bytes())
         (self.repo / "dev" / "docker-release-preflight.sh").write_bytes(PREFLIGHT.read_bytes())
+        (self.repo / "dev" / "docker-release-lock.sh").write_bytes(LOCK.read_bytes())
         subprocess.run(["git", "init", "-q", "-b", "main"], cwd=self.repo, check=True)
         subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=self.repo, check=True)
         subprocess.run(["git", "config", "user.name", "test"], cwd=self.repo, check=True)
@@ -124,6 +126,8 @@ case "$*" in
   *"git rev-parse HEAD"*) if [[ "$*" == *"fake-pm2"* ]]; then echo "$FAKE_LOCAL_SHA"; else echo "$FAKE_REMOTE_SHA"; fi;;
   *"bash -s"*) cat >/dev/null
     if [[ "$*" == *" runtime "* ]]; then echo "STALE backend image=old"; exit 0; fi
+    if [[ "$*" == *" acquire "* ]]; then echo "lock acquired"; exit 0; fi
+    if [[ "$*" == *" release "* ]]; then echo "lock released"; exit 0; fi
     if [[ "$*" == *" resources "* ]]; then echo "insufficient build resources" >&2; exit 1; fi
     exit 99;;
 esac
@@ -152,8 +156,12 @@ esac
     def test_low_resources_stop_before_code_transfer(self):
         result = self.run_deploy(self.old_sha)
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("resources", self.trace.read_text())
-        self.assertNotIn("scp", self.trace.read_text())
+        trace = self.trace.read_text()
+        self.assertIn("resources", trace)
+        self.assertNotIn("scp", trace)
+        # the unique release lock is taken before the gate and given back when the script stops
+        self.assertLess(trace.index(" acquire "), trace.index(" resources "))
+        self.assertIn(" release ", trace)
 
     def test_unsafe_backup_retention_is_refused_before_any_connection(self):
         for value in ("0", "-1", "seven"):

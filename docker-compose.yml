@@ -143,6 +143,9 @@ services:
       - ${SSL_CERT_PATH:-/etc/letsencrypt}:/etc/letsencrypt:ro
       - ./storage/uploads:/app/storage/uploads:ro
       - ./certbot:/var/www/certbot:ro
+      # 门户页是站点自己的内容，不在仓库里：以前靠服务器检出里未跟踪的 frontend/public/www/ 在现场构建时被 vite 一起拷进镜像；
+      # 预构建镜像来自干净源码没有它，所以改为从检出目录只读挂载到 nginx 根下同一路径，两种构建方式都能提供 /www/。
+      - ./frontend/public/www:/usr/share/nginx/html/www:ro
     networks:
       - ai-network
     ports:

@@ -2,6 +2,8 @@
 # Read-only Docker release checks. Also streamed over SSH before any code transfer.
 set -euo pipefail
 
+normalize_arch() { case "$1" in x86_64|amd64) echo amd64;; aarch64|arm64) echo arm64;; *) echo "$1";; esac; }
+
 case "${1:-}" in
   runtime)
     short="${2:?target short SHA required}"
@@ -31,6 +33,8 @@ case "${1:-}" in
     min_gib="${2:?minimum free GiB required}"
     min_mib="${3:?minimum available MiB required}"
     min_inodes="${4:?minimum free inodes required}"
+    # 可选第 5 参数只改提示语（build / prebuilt / image-build），阈值由调用方按各自依据算好传入。
+    label="${5:-build}"
     for value in "$min_gib" "$min_mib" "$min_inodes"; do
       [[ "$value" =~ ^[0-9]+$ ]] || { echo "invalid resource threshold" >&2; exit 2; }
     done
@@ -42,10 +46,53 @@ case "${1:-}" in
       [[ "$value" =~ ^[0-9]+$ ]] || { echo "resource availability unknown" >&2; exit 1; }
     done
     if (( disk < min_gib * 1073741824 || memory < min_mib * 1048576 || inodes < min_inodes )); then
-      echo "insufficient build resources: disk=$disk bytes memory=$memory bytes inodes=$inodes; need ${min_gib}GiB ${min_mib}MiB $min_inodes inodes" >&2
+      echo "insufficient $label resources: disk=$disk bytes memory=$memory bytes inodes=$inodes; need ${min_gib}GiB ${min_mib}MiB $min_inodes inodes" >&2
       exit 1
     fi
     echo "resources ready: disk=$disk bytes memory=$memory bytes inodes=$inodes"
     ;;
-  *) echo "usage: $0 runtime SHORT_SHA | resources MIN_GIB MIN_MIB MIN_INODES" >&2; exit 2 ;;
+  arch)
+    # 本机 Docker 守护进程的平台（Go 命名，如 linux/amd64）；读不到就失败，不猜。
+    os=$(docker version --format '{{.Server.Os}}' 2>/dev/null || true)
+    arch=$(docker version --format '{{.Server.Arch}}' 2>/dev/null || true)
+    [ -n "$os" ] && [ -n "$arch" ] || { echo "docker platform unknown" >&2; exit 1; }
+    echo "$os/$(normalize_arch "$arch")"
+    ;;
+  image-identity)
+    # 一行说明一个本地镜像：ID、平台、字节数、构建进镜像的 CUSTOMER_DOMAIN 默认值（没有则 -）。
+    tag="${2:?image tag required}"
+    [[ "$tag" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*:[A-Za-z0-9._-]+$ ]] || { echo "invalid image tag" >&2; exit 2; }
+    id=$(docker image inspect "$tag" --format '{{.Id}}' 2>/dev/null) || { echo "image missing: $tag" >&2; exit 1; }
+    os=$(docker image inspect "$tag" --format '{{.Os}}')
+    arch=$(docker image inspect "$tag" --format '{{.Architecture}}')
+    size=$(docker image inspect "$tag" --format '{{.Size}}')
+    domain=$(docker image inspect "$tag" --format '{{range .Config.Env}}{{println .}}{{end}}' | awk -F= '$1=="CUSTOMER_DOMAIN" {print $2; exit}')
+    echo "id=$id platform=$os/$(normalize_arch "$arch") size=$size customer_domain=${domain:--}"
+    ;;
+  untracked-context)
+    # 服务器检出里、会被两个 Dockerfile COPY 进镜像的未跟踪文件：现场构建会把它们带进镜像，预构建镜像里没有。
+    # 只看 Dockerfile 实际 COPY 的目录（backend/ frontend/ database/ tools/database-upgrade docker/scripts docker/nginx），
+    # .dockerignore 明确排除的那几类不算（近似，宁多勿漏）；compose 里以 ./ 开头挂载进容器的宿主目录也不算——
+    # 它们由挂载提供（如门户页 frontend/public/www/），不随镜像来源改变而消失。列出来并以 exit 1 表示存在。
+    # 第 3 参数是"保留合同"：逗号分隔的挂载宿主路径（- 表示没有），由发布脚本按**将要发布的那份** compose 算好传来——
+    # 传码前服务器上还是旧 compose，首次加挂载的升级不能拿旧 compose 判定；没给第 3 参数时才读 DIR 自己的 compose。
+    dir="${2:?checkout dir required}"
+    [ -d "$dir" ] || { echo "checkout dir missing" >&2; exit 2; }
+    if [ $# -ge 3 ]; then
+      contract="$3"
+      [[ "$contract" =~ ^(-|[A-Za-z0-9._/-]+(,[A-Za-z0-9._/-]+)*)$ ]] || { echo "invalid mount contract" >&2; exit 2; }
+      if [ "$contract" = - ]; then mounted=""; else mounted=$(echo "$contract" | tr ',' '\n' | sed -E 's/^\.\///; s/\/+$//'); fi
+    else
+      mounted=$(grep -oE '^\s*-\s*\./[A-Za-z0-9._/-]+:' "$dir/docker-compose.yml" 2>/dev/null | sed -E 's/^\s*-\s*\.\///; s/:$//; s/\/+$//' || true)
+    fi
+    list=$(git -C "$dir" status --porcelain --untracked-files=all -- backend frontend database tools/database-upgrade docker/scripts docker/nginx 2>/dev/null \
+      | awk '$1=="??" {print $2}' \
+      | grep -vE '(^|/)(node_modules|dist|build|logs|coverage|tmp|temp|__tests__)/|(^|/)\.env(\.|$)|\.(log|bak|backup|sh|test\.js|spec\.js|key|pem|crt)$|storage/(uploads|private)/' || true)
+    if [ -n "$mounted" ]; then
+      while IFS= read -r m; do [ -n "$m" ] && list=$(echo "$list" | grep -vE "^${m}(/|$)" || true); done <<< "$mounted"
+    fi
+    if [ -n "$list" ]; then echo "$list"; exit 1; fi
+    echo "no untracked build-context files"
+    ;;
+  *) echo "usage: $0 runtime SHORT_SHA | resources MIN_GIB MIN_MIB MIN_INODES [LABEL] | arch | image-identity TAG | untracked-context DIR [MOUNTS|-]" >&2; exit 2 ;;
 esac
