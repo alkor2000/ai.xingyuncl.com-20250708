@@ -4,7 +4,7 @@
   B（跨源）  : 跨源图片端点（带 CORS 头 / 不带 CORS 头 / 403 / 404），用不同端口即不同 origin
 用法: server.py --role a --port 4411 --helpers <目录>   |   server.py --role b --port 4412
 不监听回环以外地址；不代理任何外部 URL。"""
-import argparse, http.server, json, os, ssl, sys, zlib, struct
+import argparse, http.server, json, os, ssl, sys, time, zlib, struct
 
 def png_bytes(w=16, h=16, rgb=(30, 144, 255)):
     raw = b''.join(b'\x00' + bytes(rgb) * w for _ in range(h))
@@ -25,7 +25,7 @@ PAGE = """<!doctype html><meta charset="utf-8"><title>image download lab</title>
       e.stopPropagation();
       const started = performance.now();
       try {
-        const r = await ImageHelpers.downloadImage(s.url, s.filename);
+        const r = await ImageHelpers.downloadImage(s.url, s.filename, s.options || {});
         window.__results.push({ id: s.id, returned: r === undefined ? 'undefined' : r, ms: Math.round(performance.now() - started) });
       } catch (err) { window.__results.push({ id: s.id, threw: String(err && err.message || err) }); }
     };
@@ -62,6 +62,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if p == '/img/missing.png': return self._send(404, b'not found', 'text/plain')
             if p == '/img/forbidden.png': return self._send(403, b'forbidden', 'text/plain')
             if p == '/img/html.png': return self._send(200, b'<!doctype html><title>spa</title>fallback', 'text/html')
+            if p == '/img/no-type.png':
+                # 没有 Content-Type 的 200：正文其实是 HTML（EEB-R2）
+                body = b'<html>not an image</html>'
+                self.send_response(200); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body); return
+            if p == '/img/slow-body.png':
+                # 响应头立刻到、正文 6 秒后才来（EEB-R1）：被测函数的超时必须把正文也管住
+                self.send_response(200); self.send_header('Content-Type', 'image/png'); self.send_header('Content-Length', str(len(PNG))); self.end_headers()
+                self.wfile.flush(); time.sleep(6)
+                try: self.wfile.write(PNG)
+                except Exception: pass
+                return
             return self._send(404, b'', 'text/plain')
         # role b: cross-origin image host
         if p == '/img/cors.png': return self._send(200, PNG, 'image/png', cors)
@@ -91,6 +102,8 @@ def scenarios(base_a, base_b, mixed_http=''):
         {'id': 'cross-403-cors', 'url': base_b + '/img/forbidden-cors.png', 'filename': 'ai_9.jpg'},
         {'id': 'cross-403-nocors', 'url': base_b + '/img/forbidden-nocors.png', 'filename': 'ai_10.jpg'},
         {'id': 'cross-404-cors', 'url': base_b + '/img/missing-cors.png', 'filename': 'ai_11.jpg'},
+        {'id': 'same-no-content-type', 'url': base_a + '/img/no-type.png', 'filename': 'ai_14.jpg'},
+        {'id': 'same-slow-body', 'url': base_a + '/img/slow-body.png', 'filename': 'ai_15.jpg', 'options': {'timeoutMs': 1500}},
         {'id': 'missing-url', 'url': '', 'filename': 'ai_12.jpg'},
         {'id': 'null-url', 'url': None, 'filename': 'ai_13.jpg'},
     ]

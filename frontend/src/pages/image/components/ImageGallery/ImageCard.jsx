@@ -126,6 +126,9 @@ const ImageCard = memo(({
       } else {
         message.error(t('image.download.failed', { detail: result.detail || 'unknown' }));
       }
+    } catch (error) {
+      // downloadImage 本身不该抛，但真抛了也要让老师看到失败，而不是按钮转完就没了下文
+      message.error(t('image.download.failed', { detail: 'unexpected' }));
     } finally {
       setDownloading(false);
     }

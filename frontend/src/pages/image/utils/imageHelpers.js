@@ -95,7 +95,7 @@ export const resolveImageDownloadUrl = (url) => {
  * @param {string} url - 图片URL
  * @param {string} filename - 文件名（扩展名会按实际类型修正）
  * @param {{ timeoutMs?: number }} [options]
- * @returns {Promise<{ status: 'downloaded'|'opened'|'missing-url'|'failed'|'blocked', fileName?: string, httpStatus?: number, detail?: string, url?: string }>}
+ * @returns {Promise<{ status: 'downloaded'|'opened'|'missing-url'|'failed'|'blocked', fileName?: string, httpStatus?: number, detail?: 'network'|'timeout'|'body'|'not-image'|'unknown-type'|string, url?: string }>}
  */
 export const downloadImage = async (url, filename, options = {}) => {
   const target = resolveImageDownloadUrl(url);
@@ -127,17 +127,33 @@ export const downloadImage = async (url, filename, options = {}) => {
     }
     return { status: 'failed', detail: timedOut ? 'timeout' : 'network', url: href };
   }
-  if (timer) clearTimeout(timer);
+  // 响应头到了不等于拿到了图片：正文还在同一个超时里，读完（或读失败）才算结束
   if (!response.ok) {
+    if (timer) clearTimeout(timer);
     return { status: 'failed', httpStatus: response.status, detail: String(response.status), url: href };
   }
   const mime = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-  if (mime && !mime.startsWith('image/')) {
+  if (!mime) {
+    // 没有 Content-Type 就无法确认这是图片：明确失败，不嗅探、不把未知内容存成 .jpg
+    if (timer) clearTimeout(timer);
+    return { status: 'failed', detail: 'unknown-type', url: href };
+  }
+  if (!mime.startsWith('image/')) {
     // 典型情况：图片文件已不在，SPA 兜底返回了 index.html —— 不能把网页存成 .jpg
+    if (timer) clearTimeout(timer);
     return { status: 'failed', detail: 'not-image', url: href };
   }
-  const blob = await response.blob();
-  const fileName = withImageExtension(filename || 'image.jpg', mime || blob.type);
+  let blob;
+  try {
+    blob = await response.blob();
+  } catch (error) {
+    // 正文挂起到超时（AbortError）或中途断开：同样是失败，调用方要能提示并释放按钮
+    const timedOut = (error && error.name === 'AbortError') || (controller && controller.signal.aborted);
+    return { status: 'failed', detail: timedOut ? 'timeout' : 'body', url: href };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  const fileName = withImageExtension(filename || 'image.jpg', mime);
   downloadBlob(blob, fileName);
   return { status: 'downloaded', fileName, url: href };
 };

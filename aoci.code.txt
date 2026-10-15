@@ -732,7 +732,7 @@ usePagination.js[CU3T]: F:I·分页状态Hook(page/pageSize/reset) | R:code:fron
 
 ===/home/hanying/ai-platform/frontend/src/pages/image/utils/===
 constants.js[FU4S]: F:I·图像模块常量：尺寸预设与Seedream实际像素表、数量、Midjourney示例、分页/上传限制(5MB、5张)、默认参数、Tab键、MJ动作 | R:code:frontend/src/pages/image/index.jsx | A:- | S:不放界面文案，文案由组件t()生成
-imageHelpers.js[KU4S]: F:I·图像辅助函数：base64转换、文件校验、下载(fetch→Blob按MIME修扩展名；跨源无CORS退新标签；404/403/非图片报失败)、模型判定(midjourney/async；volcano Seedream)、计价(MJ×4)、URL与任务状态判定 | R:code:frontend/src/pages/image/index.jsx,code:backend/src/services/imageService.js,code:frontend/src/utils/canvas/download.js | A:- | S:downloadImage只返回结果不弹消息；isSeedreamModel须与后端一致
+imageHelpers.js[KU4S]: F:I·图像辅助函数：base64转换、文件校验、下载(fetch→Blob按MIME修扩展名；跨源无CORS退新标签；404/403/非图片/无类型/正文超时报失败)、模型判定(midjourney/async；volcano Seedream)、计价(MJ×4)、URL与任务状态判定 | R:code:frontend/src/pages/image/index.jsx,code:backend/src/services/imageService.js,code:frontend/src/utils/canvas/download.js | A:- | S:downloadImage只返回结果不弹消息；isSeedreamModel须与后端一致
 
 ===/home/hanying/ai-platform/frontend/src/pages/knowledge/===
 KnowledgeBase.jsx[AB7L]: F:万智魔方：筛选模块库，以拖入或菜单点选加入1–20个卡槽，独立拖动手柄排序，保存加载删除组合并计算Token总量 | R:code:frontend/src/stores/knowledgeStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/components/knowledge/KnowledgeModuleFormModal.jsx,code:frontend/src/utils/tokenCalculator.js | A:- | S:两种添加入口共用重复、卡槽与10万Token校验；卡槽数按用户存localStorage；团队模块须有组，系统模块仅超管可建

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-10-15T04:04:01Z",
+  "updated_at": "2026-10-15T04:18:12Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "76cb7a37afce32cf480e8ba64d774b087464a9e9ba1f72a582d96e36dcd9f891",
-      "size": 391370,
-      "normalized_sha256": "76cb7a37afce32cf480e8ba64d774b087464a9e9ba1f72a582d96e36dcd9f891"
+      "sha256": "010cfcee2db3074ea41bfc6ff8ac508c12bf820eda89a576b926643d2dc47da5",
+      "size": 391393,
+      "normalized_sha256": "010cfcee2db3074ea41bfc6ff8ac508c12bf820eda89a576b926643d2dc47da5"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -2949,9 +2949,9 @@
     },
     "frontend/src/__tests__/unit/pages/image/imageDownload.test.jsx": {
       "role": "observe",
-      "sha256": "43f3acc1613be46cbfaac466dc1058fc5d2cd15ed796773e70b394b627f6442f",
-      "size": 9412,
-      "normalized_sha256": "43f3acc1613be46cbfaac466dc1058fc5d2cd15ed796773e70b394b627f6442f"
+      "sha256": "cb1c61d6b8171ce3438f7881845ea1002af596ec6cd74d143f8bf40bb91edf7c",
+      "size": 11728,
+      "normalized_sha256": "cb1c61d6b8171ce3438f7881845ea1002af596ec6cd74d143f8bf40bb91edf7c"
     },
     "frontend/src/__tests__/unit/stores/authStore.test.js": {
       "role": "observe",
@@ -3751,9 +3751,9 @@
       "normalized_sha256": "0d5a00b966b80457c3bfe6ece828ce1e38909a25a91aa037ce0d1dda1c9d08a4"
     },
     "frontend/src/components/common/ImageViewer.jsx": {
-      "sha256": "f8ab0002fad6353097c886ea12870f59835b18de7954edd49a344bae468c06cf",
-      "size": 17824,
-      "normalized_sha256": "f8ab0002fad6353097c886ea12870f59835b18de7954edd49a344bae468c06cf"
+      "sha256": "23c7279bbebbca74b5f05dfd6ded13d6ef0764e54c5bd5c3fc0e8c7afb20f12a",
+      "size": 18041,
+      "normalized_sha256": "23c7279bbebbca74b5f05dfd6ded13d6ef0764e54c5bd5c3fc0e8c7afb20f12a"
     },
     "frontend/src/components/common/ImageViewer.less": {
       "role": "index",
@@ -4904,9 +4904,9 @@
       "normalized_sha256": "7550f82685fc2cfb1adeabf15734c3d91e8de206f836b5e82bc85d2bbf61ca1b"
     },
     "frontend/src/pages/image/components/ImageGallery/ImageCard.jsx": {
-      "sha256": "149676b810605bc831678e469aa03f8e550109a2532f15fed802ca0af4724fb4",
-      "size": 16425,
-      "normalized_sha256": "149676b810605bc831678e469aa03f8e550109a2532f15fed802ca0af4724fb4"
+      "sha256": "6de41fc9eeb374ba4b2cc95fb6ad72aaf1939179a0430a5e91b22c4235fda907",
+      "size": 16642,
+      "normalized_sha256": "6de41fc9eeb374ba4b2cc95fb6ad72aaf1939179a0430a5e91b22c4235fda907"
     },
     "frontend/src/pages/image/components/ImageGallery/MidjourneyActions.jsx": {
       "role": "index",
@@ -4969,9 +4969,9 @@
       "normalized_sha256": "21b0e729c27f670189cdadb771bdfd92f031958338cb93c15ffa6691e3d62cb8"
     },
     "frontend/src/pages/image/utils/imageHelpers.js": {
-      "sha256": "dcd9618a0aece08b47621975ab974934b7f7d1a79b99528a1d98a59828efd8aa",
-      "size": 9236,
-      "normalized_sha256": "dcd9618a0aece08b47621975ab974934b7f7d1a79b99528a1d98a59828efd8aa"
+      "sha256": "3e96036d7bf54e49f3e822fecd5c0c3a0b6cb7d2b6b486482965e0c43f3d9e66",
+      "size": 10057,
+      "normalized_sha256": "3e96036d7bf54e49f3e822fecd5c0c3a0b6cb7d2b6b486482965e0c43f3d9e66"
     },
     "frontend/src/pages/knowledge/KnowledgeBase.jsx": {
       "sha256": "b9e9dc7a5589b352f0ee7b88acfcc7a4b0c26d2a3383f8d8987c12edea25ac27",

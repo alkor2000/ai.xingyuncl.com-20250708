@@ -103,6 +103,32 @@ describe('downloadImage', () => {
     const upgraded = resolveImageDownloadUrl(`http://${loc.host}/uploads/x.jpg`)
     expect(upgraded.protocol).toBe(loc.protocol === 'https:' ? 'https:' : 'http:')
   })
+  it('a body that stalls after the headers is bounded by the same timeout and reported as a failure', async () => {
+    let signal
+    global.fetch = vi.fn(async (_url, init) => {
+      signal = init.signal
+      const body = new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))))
+      return { ok: true, status: 200, headers: new Headers({ 'content-type': 'image/png' }), blob: () => body }
+    })
+    const started = Date.now()
+    const result = await downloadImage('/uploads/stall.png', 'ai_8.jpg', { timeoutMs: 30 })
+    expect(result).toMatchObject({ status: 'failed', detail: 'timeout' })
+    expect(signal.aborted).toBe(true)
+    expect(Date.now() - started).toBeLessThan(2000)
+    expect(clicks).toEqual([])
+  })
+  it('a body read that rejects is a structured failure, never a thrown error', async () => {
+    global.fetch = vi.fn(async () => ({ ok: true, status: 200, headers: new Headers({ 'content-type': 'image/png' }), blob: async () => { throw new Error('body connection reset') } }))
+    await expect(downloadImage('/uploads/reset.png', 'ai_9.jpg')).resolves.toMatchObject({ status: 'failed', detail: 'body' })
+    expect(clicks).toEqual([])
+  })
+  it('a response without Content-Type is not trusted as an image, whatever the body is', async () => {
+    const blob = vi.fn(async () => new Blob(['<html>not an image</html>']))
+    global.fetch = vi.fn(async () => ({ ok: true, status: 200, headers: new Headers(), blob }))
+    expect(await downloadImage('/uploads/mystery.png', 'ai_10.jpg')).toMatchObject({ status: 'failed', detail: 'unknown-type' })
+    expect(blob).not.toHaveBeenCalled()
+    expect(clicks).toEqual([])
+  })
   it('missing url: no request, no click, no tab', async () => {
     global.fetch = vi.fn()
     for (const bad of ['', null, undefined]) expect(await downloadImage(bad, 'ai_7.jpg')).toEqual({ status: 'missing-url' })
@@ -131,6 +157,14 @@ describe('ImageCard download button', () => {
     release()
     await waitFor(() => expect(downloadButton).not.toBeDisabled())
     expect(notices).toEqual([['success', 'image.download.started:{"fileName":"ai_42.png"}']])
+  })
+  it('a body failure after the headers still ends with an error toast and a re-enabled button', async () => {
+    global.fetch = vi.fn(async () => ({ ok: true, status: 200, headers: new Headers({ 'content-type': 'image/jpeg' }), blob: async () => { throw new Error('body connection reset') } }))
+    const { downloadButton } = renderCard()
+    fireEvent.click(downloadButton)
+    await waitFor(() => expect(notices).toEqual([['error', 'image.download.failed:{"detail":"body"}']]))
+    await waitFor(() => expect(downloadButton).not.toBeDisabled())
+    expect(clicks).toEqual([])
   })
   it('explains a cross-origin fallback and a failure instead of staying silent', async () => {
     global.fetch = vi.fn(async () => { throw new TypeError('Failed to fetch') })
