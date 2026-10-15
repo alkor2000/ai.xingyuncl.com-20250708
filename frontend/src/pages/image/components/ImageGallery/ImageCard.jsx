@@ -34,7 +34,7 @@
  */
 
 import React, { memo, useCallback, useState } from 'react';
-import { Card, Button, Space, Tooltip, Tag, Image, Spin, Progress, Popconfirm } from 'antd';
+import { Card, Button, Space, Tooltip, Tag, Image, Spin, Progress, Popconfirm, message } from 'antd';
 import {
   EyeOutlined,
   DownloadOutlined,
@@ -86,6 +86,8 @@ const ImageCard = memo(({
   const { t, i18n } = useTranslation();
   /* 长提示词的展开/收起状态 */
   const [isExpanded, setIsExpanded] = useState(false);
+  /* 下载进行中：按钮转圈并禁用，避免连点造成重复下载 */
+  const [downloading, setDownloading] = useState(false);
 
   const isMj = item.provider === 'midjourney';
   const isFailed = isTaskFailed(item);
@@ -101,11 +103,33 @@ const ImageCard = memo(({
     copyToClipboard(item.prompt);
   }, [item.prompt]);
 
-  /* 下载图片，文件名用 ID 保证唯一，不含中文 */
-  const handleDownload = useCallback((e) => {
+  /*
+   * 下载图片，文件名用 ID 保证唯一，不含中文；扩展名由实际图片类型决定。
+   * 2026-10-14 反馈 eebafb84：生成后点下载"没有反应"。根因是存储在对象存储上的图片地址与站点不同源，
+   * 旧写法 <a download> 对跨源地址无效（浏览器忽略 download 属性，点击变成整页跳转或什么都不发生），
+   * 404/403 时也只是一个被取消的下载，页面上没有任何提示。现在按 downloadImage 的结果逐种提示。
+   */
+  const handleDownload = useCallback(async (e) => {
     e.stopPropagation();
-    downloadImage(getImageUrl(item), `ai_${item.id}.jpg`);
-  }, [item]);
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const result = await downloadImage(getImageUrl(item), `ai_${item.id}.jpg`);
+      if (result.status === 'downloaded') {
+        message.success(t('image.download.started', { fileName: result.fileName }));
+      } else if (result.status === 'opened') {
+        message.info(t('image.download.openedInNewTab'));
+      } else if (result.status === 'blocked') {
+        message.error(t('image.download.blocked'));
+      } else if (result.status === 'missing-url') {
+        message.error(t('image.download.missingUrl'));
+      } else {
+        message.error(t('image.download.failed', { detail: result.detail || 'unknown' }));
+      }
+    } finally {
+      setDownloading(false);
+    }
+  }, [item, downloading, t]);
 
   /* 切换展开/收起 */
   const toggleExpanded = useCallback((e) => {
@@ -194,6 +218,8 @@ const ImageCard = memo(({
                     <Button
                       type="text"
                       icon={<DownloadOutlined />}
+                      loading={downloading}
+                      disabled={downloading}
                       onClick={handleDownload}
                     />
                   </Tooltip>

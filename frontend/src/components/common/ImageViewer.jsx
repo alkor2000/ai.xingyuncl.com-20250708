@@ -42,6 +42,7 @@ import {
   ReloadOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { downloadImage } from '../../pages/image/utils/imageHelpers';
 import './ImageViewer.less';
 
 /* 缩放步进倍率与上下限（抽为常量，避免多处出现同一魔法数字） */
@@ -287,21 +288,35 @@ const ImageViewer = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [visible, onClose, handlePrev, handleNext, handleZoom, handleFitScreen, handleOriginalSize]);
 
+  /* 下载进行中：按钮转圈并禁用，避免连点造成重复下载 */
+  const [downloading, setDownloading] = useState(false);
+
   /**
    * 下载当前图片
-   * 文件名优先取业务数据（title/prompt），兜底用序号，均不参与翻译
+   * 文件名优先取业务数据（title/prompt），兜底用序号，均不参与翻译；扩展名按实际图片类型修正。
+   * 与图库卡片共用 downloadImage：跨源地址不能靠 <a download>，取回失败也要说清楚，
+   * 只有真正开始下载才提示"开始下载"（旧写法不论成败都提示成功）。
    */
-  const handleDownload = useCallback(() => {
-    if (!imageUrl) return;
-
-    const link = document.createElement('a');
-    link.href = imageUrl;
-    link.download = currentImage.title || currentImage.prompt || `image_${currentIndex + 1}.jpg`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    message.success(t('image.viewer.downloadStarted'));
-  }, [imageUrl, currentImage, currentIndex, t]);
+  const handleDownload = useCallback(async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const result = await downloadImage(imageUrl, currentImage.title || currentImage.prompt || `image_${currentIndex + 1}.jpg`);
+      if (result.status === 'downloaded') {
+        message.success(t('image.download.started', { fileName: result.fileName }));
+      } else if (result.status === 'opened') {
+        message.info(t('image.download.openedInNewTab'));
+      } else if (result.status === 'blocked') {
+        message.error(t('image.download.blocked'));
+      } else if (result.status === 'missing-url') {
+        message.error(t('image.download.missingUrl'));
+      } else {
+        message.error(t('image.download.failed', { detail: result.detail || 'unknown' }));
+      }
+    } finally {
+      setDownloading(false);
+    }
+  }, [imageUrl, currentImage, currentIndex, downloading, t]);
 
   /* 双击在"适应屏幕"与"原始大小"间切换 */
   const handleDoubleClick = useCallback(() => {
@@ -398,6 +413,8 @@ const ImageViewer = ({
                   <Button
                     type="text"
                     icon={<DownloadOutlined />}
+                    loading={downloading}
+                    disabled={downloading}
                     onClick={handleDownload}
                     className="toolbar-btn"
                   />

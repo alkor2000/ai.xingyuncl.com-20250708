@@ -538,7 +538,7 @@ SlideThemePicker.jsx[AU4T]: F:T·幻灯片模板选择器：Popover网格，每�
 SlideThemePicker.less[CU2T]: F:幻灯片模板选择弹层的缩略卡片网格、选中与自备图角标；默认三列，≤540px两列、≤359px单列并限制弹层宽度 | R:code:frontend/src/components/chat/new/SlideThemePicker.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/components/common/===
-ImageViewer.jsx[AU5L]: F:I·通用图片查看器：缩放、拖动、多图切换、下载、键盘快捷键，i18n化文案 | R:code:frontend/src/pages/image/index.jsx,code:frontend/src/components/common/ImageViewer.less | A:- | S:-
+ImageViewer.jsx[AU5L]: F:I·通用图片查看器：缩放、拖动、多图切换、下载(共用imageHelpers.downloadImage，按结果提示)、键盘快捷键，i18n化文案 | R:code:frontend/src/pages/image/index.jsx,code:frontend/src/components/common/ImageViewer.less,code:frontend/src/pages/image/utils/imageHelpers.js | A:- | S:只有真正开始下载才提示开始下载
 ImageViewer.less[CU2M]: F:I·图片查看器样式：遮罩、工具栏、缩略图条 | R:code:frontend/src/components/common/ImageViewer.jsx | A:- | S:-
 LanguageSwitch.jsx[AU5T]: F:C·语言切换下拉：显示当前语言，选择后调utils/i18n的changeLanguage(同时标记用户主动选择) | R:code:frontend/src/utils/i18n.js,code:frontend/src/layouts/BasicLayout/Header.jsx,code:frontend/src/pages/auth/OrgApplication.jsx | A:- | S:用户手动选过语言后系统默认语言不再覆盖
 
@@ -591,7 +591,7 @@ common.json[FL5M]: F:英文通用界面文案，包含站点、首页默认欢�
 errors.json[FL3T]: F:C·英文错误与404文案：error.*共8键 | R:code:frontend/src/locales/en-US/index.js | A:- | S:-
 forum.json[FL4M]: F:英文论坛文案：版块、发帖回复、管理、通知筛选和已读；区分版块加载中、无可发帖版块、加载失败、权限拒绝及重新加载提示 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/forum.json | A:- | S:-
 htmlEditor.json[FL4M]: F:H·英文HTML编辑器文案：htmlEditor.*扁平键，含p09教学任务作品、交作业、另一次作业提示与每个固定拒绝码一句话 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/htmlEditor.json | A:- | S:中英两侧键必须成对；不写默认已交，未知不写没交上；挡住误交时要给一条能走的下一步
-image.json[FL4S]: F:I·英文图像生成文案：image.*扁平键，含新版工作台studio.*与写提示词assist.* | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/image.json | A:- | S:与中文同名键一一对应(各180键)，只加一边页面会直接显示键名
+image.json[FL4S]: F:I·英文图像生成文案：image.*扁平键，含新版工作台studio.*、写提示词assist.*与下载结果download.* | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/image.json | A:- | S:与中文同名键一一对应(各185键)，只加一边页面会直接显示键名
 index.js[FL6T]: F:C·英文语言包入口：导入18个命名空间json并按固定顺序展开为单一translation对象(aiLab追加在末尾) | R:code:frontend/src/utils/i18n.js,code:frontend/src/locales/zh-CN/index.js | A:- | S:导入清单与展开顺序必须与zh-CN/index.js完全一致，否则缺失命名空间会回退中文或同名键取值错位；新语言包只能追加到末尾
 knowledge.json[FL4S]: F:英文knowledge.*扁平文案：模块与组合管理、权限表单、Token提示，以及点选添加到组装区和拖动排序的入口 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/knowledge.json | A:- | S:-
 profile.json[FL4T]: F:A·英文个人中心文案：profile.*含identity关联提示 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/profile.json | A:- | S:-
@@ -612,7 +612,7 @@ common.json[FL5M]: F:中文通用语言资源，提供中文平台名及默认�
 errors.json[FL3T]: F:C·中文错误与404文案：error.*共8键 | R:code:frontend/src/locales/zh-CN/index.js | A:- | S:-
 forum.json[FL4M]: F:中文论坛文案：版块、发帖回复、管理、通知筛选和已读；区分版块加载中、无可发帖版块、加载失败、权限拒绝及重新加载提示 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/forum.json | A:- | S:-
 htmlEditor.json[FL4M]: F:H·网页编辑器中文文案：项目管理、编辑预览、保存与永久链接，以及p09教学任务作品、交作业、另一次作业提示与每个固定拒绝码一句话 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/htmlEditor.json | A:- | S:中英两侧键必须成对；不写默认已交，未知不写没交上；挡住误交时要给一条能走的下一步
-image.json[FL4S]: F:I·中文图像生成文案：image.*扁平键，含新版工作台studio.*与写提示词assist.* | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/image.json | A:- | S:与英文同名键一一对应(各180键)，只加一边页面会直接显示键名
+image.json[FL4S]: F:I·中文图像生成文案：image.*扁平键，含新版工作台studio.*、写提示词assist.*与下载结果download.* | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/image.json | A:- | S:与英文同名键一一对应(各185键)，只加一边页面会直接显示键名
 index.js[FL6T]: F:C·中文语言包入口(回退语言)：导入18个命名空间json并按既有顺序展开(aiLab追加在末尾) | R:code:frontend/src/utils/i18n.js,code:frontend/src/locales/en-US/index.js | A:- | S:展开顺序是既有行为不可调整(admin覆盖common的14个同名键与后端语义一致)；新增语言包须两侧同步且只追加末尾
 knowledge.json[FL4S]: F:知识模块与组合中文文案，包含创建授权、组装排序、系统消息说明和词元限制提示 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/knowledge.json | A:- | S:-
 profile.json[FL4T]: F:A·中文个人中心文案：profile.*含identity关联提示 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/profile.json | A:- | S:-
@@ -722,7 +722,7 @@ ReferenceUploader.jsx[AU5S]: F:图像生成参考图片上传、删除和预览�
 ReferenceUploader.less[CU2S]: F:I·参考图上传组件样式 | R:code:frontend/src/pages/image/components/GenerationPanel/ReferenceUploader.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/image/components/ImageGallery/===
-ImageCard.jsx[AU5M]: F:I·图片卡片：网格/列表两种模式，处理中遮罩、失败态，查看/收藏/公开/下载/删除操作，Midjourney图挂MidjourneyActions | R:code:frontend/src/pages/image/index.jsx,code:frontend/src/pages/image/utils/imageHelpers.js,code:frontend/src/pages/image/components/ImageGallery/MidjourneyActions.jsx | A:- | S:-
+ImageCard.jsx[AU5M]: F:I·图片卡片：网格/列表两种模式，处理中遮罩、失败态，查看/收藏/公开/下载(异步单飞、按结果提示)/删除操作，Midjourney图挂MidjourneyActions | R:code:frontend/src/pages/image/index.jsx,code:frontend/src/pages/image/utils/imageHelpers.js,code:frontend/src/pages/image/components/ImageGallery/MidjourneyActions.jsx | A:- | S:下载结果映射image.download.*五键
 MidjourneyActions.jsx[AU4S]: F:I·Midjourney结果操作按钮组：U1-U4放大、V1-V4变体、重新生成，回调onAction(id,action,index) | R:code:frontend/src/pages/image/components/ImageGallery/ImageCard.jsx,code:frontend/src/pages/image/utils/constants.js | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/image/hooks/===
@@ -732,7 +732,7 @@ usePagination.js[CU3T]: F:I·分页状态Hook(page/pageSize/reset) | R:code:fron
 
 ===/home/hanying/ai-platform/frontend/src/pages/image/utils/===
 constants.js[FU4S]: F:I·图像模块常量：尺寸预设与Seedream实际像素表、数量、Midjourney示例、分页/上传限制(5MB、5张)、默认参数、Tab键、MJ动作 | R:code:frontend/src/pages/image/index.jsx | A:- | S:不放界面文案，文案由组件t()生成
-imageHelpers.js[KU4S]: F:I·图像辅助函数：base64转换、文件校验、下载、模型判定(midjourney/async；volcano Seedream)、计价(MJ×4)、URL与任务状态判定 | R:code:frontend/src/pages/image/index.jsx,code:backend/src/services/imageService.js | A:- | S:isSeedreamModel判定须与后端ImageService一致
+imageHelpers.js[KU4S]: F:I·图像辅助函数：base64转换、文件校验、下载(fetch→Blob按MIME修扩展名；跨源无CORS退新标签；404/403/非图片报失败)、模型判定(midjourney/async；volcano Seedream)、计价(MJ×4)、URL与任务状态判定 | R:code:frontend/src/pages/image/index.jsx,code:backend/src/services/imageService.js,code:frontend/src/utils/canvas/download.js | A:- | S:downloadImage只返回结果不弹消息；isSeedreamModel须与后端一致
 
 ===/home/hanying/ai-platform/frontend/src/pages/knowledge/===
 KnowledgeBase.jsx[AB7L]: F:万智魔方：筛选模块库，以拖入或菜单点选加入1–20个卡槽，独立拖动手柄排序，保存加载删除组合并计算Token总量 | R:code:frontend/src/stores/knowledgeStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/components/knowledge/KnowledgeModuleFormModal.jsx,code:frontend/src/utils/tokenCalculator.js | A:- | S:两种添加入口共用重复、卡槽与10万Token校验；卡槽数按用户存localStorage；团队模块须有组，系统模块仅超管可建
