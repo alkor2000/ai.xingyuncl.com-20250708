@@ -155,6 +155,8 @@
 
   // ===== 主内容区 =====
   .storage-main {
+    min-width: 0;
+    min-height: 0;
     flex: 1;
     background: white;
     border-radius: 20px;
@@ -284,7 +286,7 @@
       background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
       position: relative;
       // v2.0 点击空白处取消选择
-      min-height: 300px;
+      min-height: 0;
 
       &::-webkit-scrollbar { width: 8px; }
       &::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -540,6 +542,19 @@
     }
   }
 
+  .storage-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    gap: 8px;
+    padding: 12px 100px 12px 20px; // Keep page controls clear of the floating upload button.
+    border-top: 1px solid #e2e8f0;
+    background: white;
+    .ant-pagination { margin: 0; }
+  }
+
   // ===== v2.0 底部状态栏 =====
   .storage-status-bar {
     height: 32px;
@@ -713,7 +728,7 @@
     .storage-main .storage-toolbar { padding: 12px;
       .breadcrumb-nav { min-width: 0; flex-wrap: wrap; overflow-wrap: anywhere; }
       .toolbar-actions { width: 100%; min-width: 0; }
-      .search-box { flex: 1; min-width: 0; input, input:focus { width: 100%; } }
+      .search-box { flex: 1 0 100%; min-width: 0; input, input:focus { width: 100%; } }
     }
     .upload-fab { right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); }
   }

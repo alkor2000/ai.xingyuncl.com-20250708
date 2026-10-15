@@ -21,9 +21,18 @@ import { create } from 'zustand'
 import apiClient from '../utils/api'
 import i18n from '../utils/i18n'
 
+const sameFolder = (a, b) => String(a ?? '') === String(b ?? '')
+
 const useStorageStore = create((set, get) => ({
   // ===== 状态 =====
   files: [],
+  pagination: { page: 1, limit: 50, total: 0, pages: 0 },
+  filesLoading: false,
+  foldersLoading: false,
+  filesError: null,
+  foldersError: null,
+  fileRequestId: 0,
+  folderRequestId: 0,
   folders: [],
   folderTree: [],
   currentFolder: null,
@@ -42,19 +51,60 @@ const useStorageStore = create((set, get) => ({
    * 获取文件列表
    */
   getFiles: async (folderId = null, options = {}) => {
-    set({ loading: true, error: null })
+    // A mutation may finish after navigation; it must not restore its old folder.
+    if (!sameFolder(folderId, get().currentFolder?.id)) return null
+    const requestId = get().fileRequestId + 1
+    const page = Math.max(1, Number(options.page) || 1)
+    const limit = Math.max(1, Number(options.limit) || 50)
+    const pageChanged = page !== get().pagination.page || limit !== get().pagination.limit
+    set(state => ({
+      fileRequestId: requestId, filesLoading: true, filesError: null,
+      pagination: { ...state.pagination, page, limit },
+      ...(pageChanged ? { files: [], selectedFiles: [], selectedFolders: [] } : {})
+    }))
+    const isCurrent = () => get().fileRequestId === requestId && sameFolder(folderId, get().currentFolder?.id)
     try {
-      const params = { folder_id: folderId, ...options }
-      const response = await apiClient.get('/storage/files', { params })
-      set({ files: response.data.data.files, loading: false })
-      return response.data.data
+      let requestedPage = page
+      while (isCurrent()) {
+        const params = { ...options, folder_id: folderId, page: requestedPage, limit }
+        const response = await apiClient.get('/storage/files', { params })
+        if (!isCurrent()) return null
+        const data = response.data.data
+        const total = Number(data.pagination.total)
+        const pages = Math.ceil(total / limit)
+        const lastPage = Math.max(1, pages)
+        // Deletion/move can empty the last page. Re-fetch the valid page, not a
+        // client-side slice, and keep the same request identity during correction.
+        if (requestedPage > lastPage) {
+          requestedPage = lastPage
+          set(state => ({ pagination: { ...state.pagination, page: lastPage, total, pages } }))
+          continue
+        }
+        set(state => ({
+          files: data.files, pagination: { page: requestedPage, limit, total, pages },
+          selectedFiles: state.selectedFiles.filter(id => data.files.some(file => file.id === id)),
+          filesLoading: false, filesError: null
+        }))
+        return data
+      }
+      return null
     } catch (error) {
+      if (!isCurrent()) return null
       console.error('Failed to get file list:', error)
-      set({ error: error.response?.data?.message || i18n.t('storage.getFilesFailed'), loading: false })
+      set({ files: [], selectedFiles: [], filesError: { key: 'storage.getFilesFailed', detail: error.response?.data?.message }, filesLoading: false })
       throw error
     }
   },
-  
+
+  // Always read the current folder/page at invocation, including after an async
+  // mutation. Failure remains visible/retryable without misreporting a saved write.
+  refreshFiles: async () => {
+    const state = get()
+    try {
+      return await state.getFiles(state.currentFolder?.id, { page: state.pagination.page, limit: state.pagination.limit })
+    } catch { return null }
+  },
+
   /**
    * 上传文件
    */
@@ -75,7 +125,7 @@ const useStorageStore = create((set, get) => ({
       })
       
       // 刷新文件列表
-      await get().getFiles(folderId)
+      await get().refreshFiles()
       set({ uploading: false, uploadProgress: 0 })
       return response.data.data
     } catch (error) {
@@ -114,7 +164,7 @@ const useStorageStore = create((set, get) => ({
       await apiClient.post('/storage/files/batch-delete', { file_ids: fileIds })
       set(state => ({
         files: state.files.filter(f => !fileIds.includes(f.id)),
-        selectedFiles: [],
+        selectedFiles: state.selectedFiles.filter(id => !fileIds.includes(id)),
         loading: false
       }))
       return true
@@ -154,10 +204,12 @@ const useStorageStore = create((set, get) => ({
     try {
       // 逐个移动（后端暂无批量移动API）
       const results = { success: 0, failed: 0 }
+      const movedIds = []
       for (const fileId of fileIds) {
         try {
           await apiClient.put(`/storage/files/${fileId}/move`, { target_folder_id: targetFolderId })
           results.success++
+          movedIds.push(fileId)
         } catch (e) {
           results.failed++
           console.error(`Failed to move file ${fileId}:`, e)
@@ -166,9 +218,8 @@ const useStorageStore = create((set, get) => ({
       
       // 从当前列表中移除已移动的文件
       set(state => ({
-        files: state.files.filter(f => !fileIds.includes(f.id)),
-        selectedFiles: [],
-        selectedFolders: [],
+        files: state.files.filter(f => !movedIds.includes(f.id)),
+        selectedFiles: state.selectedFiles.filter(id => !movedIds.includes(id)),
         loading: false
       }))
       
@@ -214,20 +265,29 @@ const useStorageStore = create((set, get) => ({
    * 获取文件夹列表
    */
   getFolders: async (parentId = null, includeSpecial = false) => {
-    set({ loading: true, error: null })
+    if (!sameFolder(parentId, get().currentFolder?.id)) return null
+    const requestId = get().folderRequestId + 1
+    set({ folderRequestId: requestId, foldersLoading: true, foldersError: null })
+    const isCurrent = () => get().folderRequestId === requestId && sameFolder(parentId, get().currentFolder?.id)
     try {
       const params = parentId ? { parent_id: parentId } : {}
       if (includeSpecial) params.include_special = true
       const response = await apiClient.get('/storage/folders', { params })
-      set({ folders: response.data.data, loading: false })
-      return response.data.data
+      if (!isCurrent()) return null
+      const folders = response.data.data
+      set(state => ({
+        folders, foldersLoading: false,
+        selectedFolders: state.selectedFolders.filter(id => folders.some(folder => folder.id === id))
+      }))
+      return folders
     } catch (error) {
+      if (!isCurrent()) return null
       console.error('Failed to get folder list:', error)
-      set({ error: error.response?.data?.message || i18n.t('storage.getFoldersFailed'), loading: false })
+      set({ folders: [], selectedFolders: [], foldersError: { key: 'storage.getFoldersFailed', detail: error.response?.data?.message }, foldersLoading: false })
       throw error
     }
   },
-  
+
   /**
    * 获取文件夹树（包含特殊文件夹）
    */
@@ -412,7 +472,14 @@ const useStorageStore = create((set, get) => ({
   // ===== 辅助方法 =====
   
   /** 设置当前文件夹 */
-  setCurrentFolder: (folder) => set({ currentFolder: folder }),
+  setCurrentFolder: (folder) => set(state => sameFolder(folder?.id, state.currentFolder?.id)
+    ? { currentFolder: folder }
+    : {
+      currentFolder: folder, files: [], folders: [], selectedFiles: [], selectedFolders: [],
+      pagination: { ...state.pagination, page: 1, total: 0, pages: 0 },
+      fileRequestId: state.fileRequestId + 1, folderRequestId: state.folderRequestId + 1,
+      filesLoading: false, foldersLoading: false, filesError: null, foldersError: null
+    }),
   
   /** 切换文件选择 */
   toggleFileSelection: (fileId) => set(state => ({
@@ -432,13 +499,13 @@ const useStorageStore = create((set, get) => ({
    * v1.1 设置选中的文件（替换模式，用于Ctrl+Click/Shift+Click）
    * @param {Array<number>} fileIds - 文件ID数组
    */
-  setSelectedFiles: (fileIds) => set({ selectedFiles: fileIds }),
+  setSelectedFiles: (fileIds) => set(state => ({ selectedFiles: typeof fileIds === 'function' ? fileIds(state.selectedFiles) : fileIds })),
   
   /**
    * v1.1 设置选中的文件夹
    * @param {Array<number>} folderIds - 文件夹ID数组
    */
-  setSelectedFolders: (folderIds) => set({ selectedFolders: folderIds }),
+  setSelectedFolders: (folderIds) => set(state => ({ selectedFolders: typeof folderIds === 'function' ? folderIds(state.selectedFolders) : folderIds })),
   
   /**
    * v1.1 从本地列表中获取文件信息

@@ -51,7 +51,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Button, Upload, Table, Space, Modal, Input, message, Progress,
-  Tooltip, Tag, Row, Col, Statistic, Tree, Spin, Grid, Alert, Divider, Breadcrumb
+  Tooltip, Tag, Row, Col, Statistic, Tree, Spin, Grid, Alert, Divider, Breadcrumb, Pagination
 } from 'antd'
 import {
   FolderAddOutlined, DeleteOutlined, DownloadOutlined, EyeOutlined,
@@ -194,8 +194,8 @@ const StorageManager = () => {
   // Store
   const {
     files, folders, folderTree, currentFolder, selectedFiles, selectedFolders,
-    storageStats, creditConfig, loading, uploading,
-    getFiles, getFolders, getFolderTree, getStorageStats, getCreditConfig,
+    storageStats, creditConfig, loading, uploading, pagination, filesLoading, foldersLoading, filesError, foldersError,
+    getFiles, getFolders, getFolderTree, getStorageStats, getCreditConfig, refreshFiles,
     uploadFiles, deleteFile, deleteFiles, moveFile, batchMoveFiles, renameFile,
     createFolder, renameFolder, deleteFolder,
     setCurrentFolder, setSelectedFiles, setSelectedFolders,
@@ -271,15 +271,27 @@ const StorageManager = () => {
   }, [fileList, creditConfig, calculateUploadCredits])
 
   // ===== 数据加载 =====
-  useEffect(() => { loadData(); getCreditConfig() }, [currentFolder])
-
-  const loadData = async () => {
-    await Promise.all([
-      getFiles(currentFolder?.id),
-      getFolders(currentFolder?.id),
-      getFolderTree(),
-      getStorageStats()
+  const folderId = currentFolder?.id ?? null
+  const loadData = useCallback(async () => {
+    // Callbacks from uploads/deletes may belong to an older render. Refresh the
+    // live location instead of the directory captured when the operation began.
+    const state = useStorageStore.getState()
+    await Promise.allSettled([
+      state.refreshFiles(), state.getFolders(state.currentFolder?.id),
+      state.getFolderTree(), state.getStorageStats()
     ])
+  }, [])
+
+  useEffect(() => { loadData(); getCreditConfig() }, [folderId, loadData, getCreditConfig])
+  useEffect(() => {
+    setLastClickedIndex(-1)
+    setContextMenu(null)
+    setRenamingId(null)
+  }, [folderId, pagination.page])
+
+  const handlePageChange = (page) => {
+    getFiles(folderId, { page, limit: pagination.limit }).catch(() => {})
+    contentRef.current?.scrollTo({ top: 0 })
   }
 
   // ===== 键盘快捷键 =====
@@ -614,7 +626,7 @@ const StorageManager = () => {
         try {
           if (selectedFiles.length > 0) await deleteFiles(selectedFiles)
           for (const fId of selectedFolders) { try { await deleteFolder(fId) } catch {} }
-          message.success(t('common.deleteSuccess')); clearSelection(); await loadData()
+          message.success(t('common.deleteSuccess')); await loadData()
         } catch { message.error(t('common.deleteFailed')) }
       }
     })
@@ -643,7 +655,7 @@ const StorageManager = () => {
       const result = await batchMoveFiles(fileIdsToMove, moveTargetFolderId)
       if (result.success > 0) message.success(t('storage.batchMoveSuccess', { success: result.success }))
       if (result.failed > 0) message.error(t('storage.batchMoveFailed', { failed: result.failed }))
-      setMoveModalVisible(false); clearSelection(); await loadData()
+      setMoveModalVisible(false); await loadData()
     } catch { message.error(t('storage.moveFailed')) }
   }, [selectedFiles, contextMenu, moveTargetFolderId, batchMoveFiles, clearSelection, t, loadData])
 
@@ -956,7 +968,7 @@ const StorageManager = () => {
             </div>
             <div className="toolbar-actions">
               <div className="search-box">
-                <Input placeholder={t('storage.searchPlaceholder')} value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} allowClear />
+                <Input placeholder={t('storage.searchCurrentPage')} value={searchKeyword} onChange={(e) => setSearchKeyword(e.target.value)} allowClear />
                 <SearchOutlined className="search-icon" />
               </div>
               <div className="view-switcher">
@@ -981,12 +993,18 @@ const StorageManager = () => {
             onClick={handleContentClick}
             onContextMenu={(e) => { if (e.target === e.currentTarget || !e.target.closest('.file-item')) handleContextMenu(e, null, 'blank') }}
           >
-            {loading ? (
+            {loading || filesLoading || foldersLoading ? (
               <div className="loading-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
                 <Spin size="large" tip={t('storage.loading')} />
               </div>
             ) : (
               <>
+                {(filesError || foldersError) && (
+                  <Alert type="error" showIcon
+                    message={t((filesError || foldersError).key)}
+                    description={(filesError || foldersError).detail}
+                    action={<Button onClick={loadData}>{t('button.retry')}</Button>} />
+                )}
                 {viewMode === ViewMode.GRID ? renderGridView() : (
                   <Table columns={columns}
                     dataSource={[...filteredFolders.map(f => ({...f, _isFolder: true})), ...filteredFiles]}
@@ -999,7 +1017,7 @@ const StorageManager = () => {
                     })}
                   />
                 )}
-                {filteredFiles.length === 0 && filteredFolders.length === 0 && (
+                {!filesError && !foldersError && filteredFiles.length === 0 && filteredFolders.length === 0 && (
                   <div className="empty-state">
                     <InboxOutlined className="empty-icon" />
                     <div className="empty-text">{t('storage.noFiles')}</div>
@@ -1009,6 +1027,13 @@ const StorageManager = () => {
                 )}
               </>
             )}
+          </div>
+
+          <div className="storage-pagination" aria-label={t('storage.filePages')}>
+            <span>{t('storage.filesTotal', { total: pagination.total })}</span>
+            <Pagination current={pagination.page} pageSize={pagination.limit} total={pagination.total}
+              onChange={handlePageChange} showSizeChanger={false} hideOnSinglePage
+              simple={!screens.md} size="small" disabled={filesLoading} />
           </div>
 
           {/* 底部状态栏 */}

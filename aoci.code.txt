@@ -596,7 +596,7 @@ index.js[FL6T]: F:C·英文语言包入口：导入18个命名空间json并按�
 knowledge.json[FL4S]: F:英文knowledge.*扁平文案：模块与组合管理、权限表单、Token提示，以及点选添加到组装区和拖动排序的入口 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/knowledge.json | A:- | S:-
 profile.json[FL4T]: F:A·英文个人中心文案：profile.*含identity关联提示 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/profile.json | A:- | S:-
 smartApps.json[FL4T]: F:P·英文智能应用文案：smartApps.*扁平键 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/smartApps.json | A:- | S:-
-storage.json[FL4S]: F:S·英文云盘文案：storage.*扁平键 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/storage.json | A:- | S:-
+storage.json[FL4S]: F:云盘英文语言资源，覆盖文件夹与文件管理、上传积分、批量操作、错误、当前页筛选与分页总数 | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/storage.json | A:- | S:-
 teaching.json[FL2M]: F:E·英文教学文案(模块已停用)：嵌套对象teaching.* | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/teaching.json | A:- | S:比zh-CN少17个键(batch*/total*等)，英文下回退中文
 video.json[FL4S]: F:V·英文视频生成文案：video.*扁平键，含新版工作台studio.* | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/video.json | A:- | S:-
 wiki.json[FL4S]: F:W·英文知识库文案：嵌套对象wiki.* | R:code:frontend/src/locales/en-US/index.js,code:frontend/src/locales/zh-CN/wiki.json | A:- | S:-
@@ -617,7 +617,7 @@ index.js[FL6T]: F:C·中文语言包入口(回退语言)：导入18个命名空�
 knowledge.json[FL4S]: F:知识模块与组合中文文案，包含创建授权、组装排序、系统消息说明和词元限制提示 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/knowledge.json | A:- | S:-
 profile.json[FL4T]: F:A·中文个人中心文案：profile.*含identity关联提示 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/profile.json | A:- | S:-
 smartApps.json[FL4T]: F:P·中文智能应用文案：smartApps.*扁平键 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/smartApps.json | A:- | S:-
-storage.json[FL4S]: F:云盘中文语言资源，覆盖文件夹与文件管理、对象存储设置、批量选择和操作状态 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/storage.json | A:- | S:-
+storage.json[FL4S]: F:云盘中文语言资源，覆盖文件夹与文件管理、上传积分、批量操作、错误、当前页筛选与分页总数 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/storage.json | A:- | S:-
 teaching.json[FL2M]: F:教学模块中文嵌套文案，包含模块课程封面与材料链接、教学权限及头部网页配置操作 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/teaching.json | A:- | S:-
 video.json[FL4S]: F:V·中文视频文案：模型选择、素材参数、生成历史与状态错误提示，含新版工作台studio.* | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/video.json | A:- | S:供应商与模型品牌名保持原名
 wiki.json[FL4S]: F:知识库中文嵌套语言资源，覆盖文档编辑上传、语义检索索引、向量化模型和词元计数 | R:code:frontend/src/locales/zh-CN/index.js,code:frontend/src/locales/en-US/wiki.json | A:- | S:-
@@ -768,8 +768,8 @@ SmartApps.jsx[AU6L]: F:P·智能应用广场：已发布应用卡片按分类/�
 SmartApps.less[CU2L]: F:P·智能应用广场样式 | R:code:frontend/src/pages/smartApps/SmartApps.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/storage/===
-StorageManager.jsx[AB7L]: F:S·智能云盘文件管理器：文件夹树/面包屑、拖拽上传与拖拽移动、多选(Shift/Ctrl)、右键菜单、重命名、预览/下载/复制oss_url、按creditConfig计上传积分 | R:code:frontend/src/stores/storageStore.js,code:frontend/src/stores/authStore.js,code:backend/src/routes/storageRoutes.js | A:- | S:上传成功后主动刷新getCurrentUser同步积分；单文件上限取creditConfig.max_file_size否则用本地兜底
-StorageManager.less[CU2L]: F:云盘文件夹、文件列表、搜索工具栏与上传悬钮样式；手机以自然高度纵向滚动，面包屑换行、搜索框伸缩、悬钮避开底部安全区 | R:code:frontend/src/pages/storage/StorageManager.jsx | A:- | S:-
+StorageManager.jsx[AB7L]: F:云盘文件管理器：目录导航、网格/列表共用服务端分页、上传及积分提示、拖拽移动、多选/右键操作、重命名、预览下载及加载失败重试 | R:code:frontend/src/stores/storageStore.js,code:frontend/src/stores/authStore.js,code:frontend/src/pages/storage/StorageManager.less | A:- | S:筛选仅作用当前页；文件夹不参与文件分页。异步操作完成按store当前目录页刷新，避免旧闭包跳回；上传后同步账号积分。
+StorageManager.less[CU2L]: F:云盘目录、网格/列表、工具栏、菜单和上传悬钮样式；分页预留悬钮空间，手机自然纵向滚动且搜索独占一行 | R:code:frontend/src/pages/storage/StorageManager.jsx | A:- | S:-
 
 ===/home/hanying/ai-platform/frontend/src/pages/teaching/===
 LessonDetail.jsx[AU5L]: F:课程详情、信息编辑和资料管理，页面列表以门户品牌徽章链接查看器及编辑器 | R:code:frontend/src/stores/teachingStore.js,code:frontend/src/components/teaching/MaterialsManager.jsx | A:/teaching/lessons/:id展示课程和页面列表；只调整界面主题与阴影，页面数据保持原值 | S:编辑权限取super_admin或模块user_permission为edit
@@ -806,7 +806,7 @@ moduleStore.js[AD6T]: F:C·当前用户可访问模块store：GET /admin/modules
 ocrStore.js[AB5S]: F:O·OCR store：配置、单图/PDF/批量识别(FormData)、任务列表与详情 | R:code:frontend/src/utils/api.js,code:backend/src/routes/ocrRoutes.js | A:- | S:-
 smartAppStore.js[AB6M]: F:P·智能应用store：已发布应用/分类/收藏切换/详情/配置、useApp计次、按应用取或建会话与清空、本地分类与搜索过滤 | R:code:frontend/src/utils/api.js,code:backend/src/routes/smartAppRoutes.js,code:frontend/src/components/smartApps/SmartAppChatModal.jsx | A:- | S:-
 statsStore.js[AO4S]: F:C·实时统计store：initializeSocket实为30s轮询/stats/realtime(保留旧接口名)，心跳POST /stats/heartbeat | R:code:frontend/src/utils/api.js,code:backend/src/routes/stats.js | A:- | S:不再使用WebSocket，名称为兼容保留
-storageStore.js[AB6L]: F:S·云盘store：文件列表/上传/删除/批量删除/移动/重命名，文件夹树CRUD，统计，OSS配置与连通测试、存储积分配置(admin)，calculateUploadCredits与选择状态 | R:code:frontend/src/utils/api.js,code:backend/src/routes/storageRoutes.js,code:backend/src/routes/admin/ossRoutes.js,code:frontend/src/pages/storage/StorageManager.jsx | A:- | S:-
+storageStore.js[AB6L]: F:云盘状态与API编排：服务端文件分页及末页纠正、文件上传/删移/重命名、文件夹树CRUD、容量及OSS/积分配置、加载错误和选择状态 | R:code:frontend/src/utils/api.js,code:backend/src/routes/storageRoutes.js,code:backend/src/routes/admin/ossRoutes.js,code:frontend/src/pages/storage/StorageManager.jsx | A:- | S:翻页清选择；切目录即时使旧请求失效。异步写入完成按当前目录页刷新；刷新失败不把成功上传报成失败。
 systemConfigStore.js[AC7M]: F:加载和兼容系统与用户组站点配置，提供品牌、聊天、模型、积分及主题读取，已知默认平台名称按语言兜底 | R:code:frontend/src/utils/api.js,code:frontend/src/stores/authStore.js,code:frontend/src/utils/i18n.js,code:backend/src/routes/public.js | A:getSiteName/getSiteLogo优先用户组配置 | S:与authStore循环引用，初始化状态不调用i18n；自定义站点名称保留；默认名称在读取时翻译
 teachingStore.js[AB6L]: F:E·教学store：分组与分组模块、模块CRUD/批量更新、课程CRUD、教案保存/读取(按页)、权限授予/撤销、草稿自动保存、浏览日志 | R:code:frontend/src/utils/api.js,code:backend/src/routes/teachingRoutes.js,code:frontend/src/pages/teaching/LessonEditor.jsx | A:- | S:403错误做友好提示不跳转；错误文案仍为硬编码中文
 videoStore.js[AB7L]: F:V·视频store：模型列表、generateVideo后按taskId每5s轮询/video/task/:id(最长10分钟)，历史/公开图库/收藏/公开/删除、统计、关键词，initializePolling恢复未完成任务；轮询顺手按taskId留taskSnapshots快照 | R:code:frontend/src/utils/api.js,code:backend/src/routes/video.js,code:frontend/src/pages/video/VideoGeneration.jsx | A:- | S:轮询只map当前generationHistory切片，用户搜索/翻页后完成载荷会丢，故另留taskSnapshots(与切片无关，删除时同步清)；processingTasks按taskId存于store，轮询超时会删除任务并提示

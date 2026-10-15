@@ -127,5 +127,8 @@
   "storage.getFolderTreeFailed": "Failed to get folder tree",
   "storage.deleteFolderFailed": "Failed to delete folder",
   "storage.saveOSSConfigFailed": "Failed to save OSS configuration",
-  "storage.updateCreditConfigFailed": "Failed to update credit configuration"
+  "storage.updateCreditConfigFailed": "Failed to update credit configuration",
+  "storage.searchCurrentPage": "Filter files or folders on this page",
+  "storage.filePages": "File pages",
+  "storage.filesTotal": "{{total}} files in total"
 }
