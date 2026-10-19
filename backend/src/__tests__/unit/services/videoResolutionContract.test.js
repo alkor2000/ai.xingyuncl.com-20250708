@@ -62,6 +62,22 @@ describe('buildTextContent: resolution is always explicit', () => {
     expect(() => VideoService.buildTextContent({ prompt: 'p', duration: 7 }, seedance())).toThrow('不支持的时长: 7');
     expect(() => VideoService.buildTextContent({ prompt: 'p', ratio: '2:1' }, seedance())).toThrow('不支持的宽高比: 2:1');
   });
+  it('review R1: without a ratios_supported list the ratio must still look like a ratio — no second --rs can ride along', () => {
+    const noList = { ...seedance(), ratios_supported: null };
+    expect(() => VideoService.buildTextContent({ prompt: 'p', ratio: '16:9 --rs 1080p' }, noList)).toThrow('不支持的宽高比: 16:9 --rs 1080p');
+    expect(() => VideoService.buildTextContent({ prompt: 'p', ratio: 'nonsense' }, noList)).toThrow('不支持的宽高比: nonsense');
+    expect(() => VideoService.buildTextContent({ prompt: 'p', ratio: ' 9:16' }, noList)).toThrow('不支持的宽高比');
+    expect(commands(VideoService.buildTextContent({ prompt: 'p', ratio: '9:16' }, noList))).toEqual(['--rs 720p', '--rt 9:16', '--dur 5']);
+    expect(commands(VideoService.buildTextContent({ prompt: 'p', ratio: 'adaptive' }, noList))).toEqual(['--rs 720p', '--rt adaptive', '--dur 5']);
+    const noListNoDefault = { ...noList, default_ratio: null };
+    expect(commands(VideoService.buildTextContent({ prompt: 'p' }, noListNoDefault))).toEqual(['--rs 720p', '--dur 5']);
+  });
+  it('review R1: fps and seed are written only as integers, so a string cannot smuggle another command', () => {
+    const text = VideoService.buildTextContent({ prompt: 'p', fps: '24 --rs 1080p', seed: '7 --rs 1080p' }, { ...seedance(), fps_supported: null });
+    expect(commands(text)).toEqual(['--rs 720p', '--rt 16:9', '--dur 5']);
+    expect(text.match(/--rs /g)).toHaveLength(1);
+    expect(commands(VideoService.buildTextContent({ prompt: 'p', fps: 30, seed: 7 }, { ...seedance(), fps_supported: [24, 30] }))).toEqual(['--rs 720p', '--rt 16:9', '--dur 5', '--fps 30', '--seed 7']);
+  });
   it('image-to-video keeps the upstream adaptive ratio unless the user chose one', () => {
     const img = { prompt: 'p', generation_mode: 'first_frame', first_frame_image: 'https://img.example/a.jpg' };
     expect(commands(VideoService.buildTextContent(img, seedance()))).toEqual(['--rs 720p', '--dur 5']);
@@ -136,5 +152,45 @@ describe('submitVideoGeneration: one set of effective values for price, record a
     await VideoService.submitVideoGeneration(7, 9, { prompt: '校园', resolution: '720p' });
     expect(klingVideoService.submitText2Video).toHaveBeenCalledTimes(1);
     expect(axios.post).not.toHaveBeenCalled();
+  });
+  /* 评审项 2：其它 provider 的配置不一定有 *_supported 列表、默认值也可能缺，新规则不能碰它们 */
+  const klingLike = () => ({
+    id: 9, is_active: 1, provider: 'kling', model_id: 'kling-v1-5', display_name: 'Kling 1.5', endpoint: 'https://kling.example.invalid', api_key: 'enc',
+    resolutions_supported: null, durations_supported: null, fps_supported: null, ratios_supported: null,
+    default_resolution: null, default_duration: null, default_fps: null, default_ratio: null, max_prompt_length: 2500, api_config: { model_version: 'kling-v1-5', mode: 'std' }
+  });
+  const soraLike = () => ({
+    id: 11, is_active: 1, provider: 'sora2_goapi', model_id: 'sora-2', display_name: 'Sora 2', endpoint: 'https://goapi.example.invalid', api_key: 'enc',
+    resolutions_supported: ['std', 'hd'], durations_supported: [10, 15], fps_supported: null, ratios_supported: ['16:9', '9:16', '1:1'],
+    default_resolution: 'std', default_duration: 10, default_fps: null, default_ratio: '16:9', max_prompt_length: 2000, api_config: { model_name: 'sora-2' }
+  });
+  it('review R2: a kling model with no lists and no defaults behaves exactly as before — no new validation, previous values priced and recorded', async () => {
+    VideoModel.findById.mockResolvedValue(klingLike());
+    const params = { prompt: '校园', resolution: 'ultra-wide', duration: 5, ratio: '16:9', generation_mode: 'text_to_video' };
+    const result = await VideoService.submitVideoGeneration(7, 9, params);
+    expect(result.success).toBe(true);
+    expect(VideoModel.calculatePrice).toHaveBeenCalledWith(expect.objectContaining({ id: 9 }), 'ultra-wide', 5);
+    expect(VideoGeneration.create).toHaveBeenCalledWith(expect.objectContaining({ resolution: 'ultra-wide', duration: 5, ratio: '16:9', provider: 'kling' }));
+    expect(klingVideoService.submitText2Video).toHaveBeenCalledWith(expect.objectContaining({ id: 9 }), params);
+    expect(axios.post).not.toHaveBeenCalled();
+    jest.clearAllMocks(); VideoModel.findById.mockResolvedValue(klingLike()); User.findById.mockResolvedValue(user()); VideoService.pollTaskStatus = jest.fn();
+    await VideoService.submitVideoGeneration(7, 9, { prompt: '校园' });
+    expect(VideoModel.calculatePrice).toHaveBeenCalledWith(expect.anything(), null, null);
+    expect(VideoGeneration.create).toHaveBeenCalledWith(expect.objectContaining({ resolution: null, duration: null }));
+  });
+  it('review R2: a sora2 model keeps its orientation conversion and raw parameter pass-through', async () => {
+    const sora2VideoService = require('../../../services/sora2VideoService');
+    VideoModel.findById.mockResolvedValue(soraLike());
+    const params = { prompt: '校园', ratio: '9:16', resolution: 'hd', duration: 15 };
+    await VideoService.submitVideoGeneration(7, 11, params);
+    expect(sora2VideoService.convertRatioToOrientation).toHaveBeenCalledWith('9:16');
+    expect(sora2VideoService.submitText2Video).toHaveBeenCalledWith(expect.objectContaining({ id: 11 }), params);
+    expect(VideoModel.calculatePrice).toHaveBeenCalledWith(expect.anything(), 'hd', 15);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+  it('review R2: the Volcano rule still refuses what the other providers let through', async () => {
+    VideoModel.findById.mockResolvedValue({ ...seedance(), resolutions_supported: null });
+    await expect(VideoService.submitVideoGeneration(7, 1, { prompt: '校园', resolution: 'ultra-wide' })).rejects.toThrow('不支持的分辨率: ultra-wide');
+    expect(VideoGeneration.create).not.toHaveBeenCalled();
   });
 });

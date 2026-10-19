@@ -11,6 +11,8 @@
  *   而平台默认 720p、上游默认 1080p：用户选 720p（等于平台默认）或不选时都被上游按 1080p 生成并计费，
  *   2026-10-19 核出 206 条。宽高比在文生视频下同样显式发送；图生视频未显式选择时仍交给上游自适应。
  * - 有效参数由 resolveEffectiveParams 统一算出并校验：缺省取平台默认，非法或缺失即拒绝，绝不以"省略"落到上游默认。
+ *   只作用于火山路径；kling / sora2 的取值与请求构造保持原样。宽高比无支持列表时也校验形状，帧率/种子只接受整数，
+ *   防止带空格的参数把另一条命令夹带进文本命令串。
  */
 
 const axios = require('axios');
@@ -89,8 +91,12 @@ class VideoService {
         throw new Error('用户不存在');
       }
 
-      // 3. 算出生效参数（缺省取平台默认，非法即拒绝）并据此计算积分消耗——计费、落库、发给上游的必须是同一组值
-      const effective = this.resolveEffectiveParams(params, model);
+      // 3. 计算积分消耗。火山路径：先算出生效参数（缺省取平台默认，非法即拒绝），计费、落库、发给上游必须是同一组值；
+      //    kling / sora2 走各自服务，这里保持原来的取值方式，不套火山的规格规则（v1.3 评审项 2）
+      const usesVolcanoCommand = model.provider !== 'kling' && model.provider !== 'sora2_goapi';
+      const effective = usesVolcanoCommand
+        ? this.resolveEffectiveParams(params, model)
+        : { resolution: params.resolution || model.default_resolution, duration: params.duration || model.default_duration };
       const creditsRequired = VideoModel.calculatePrice(
         model,
         effective.resolution,
@@ -354,7 +360,11 @@ class VideoService {
     const ratioExplicit = typeof params.ratio === 'string' && params.ratio.trim() !== '';
     const ratio = ratioExplicit ? params.ratio : (model.default_ratio || null);
     const ratiosSupported = supported(model.ratios_supported);
-    if (ratio && ratiosSupported && !ratiosSupported.includes(ratio)) {
+    // 有列表按列表；没有列表也必须是 16:9 / 9:16 / adaptive 这种形状——否则一个带空格的宽高比就能把另一条 --rs 夹带进命令串
+    const ratioOk = ratio === null || (typeof ratio === 'string' && (
+      ratiosSupported ? ratiosSupported.includes(ratio) : /^(\d{1,2}:\d{1,2}|adaptive)$/i.test(ratio)
+    ));
+    if (!ratioOk) {
       throw new Error(`不支持的宽高比: ${ratio}`);
     }
 
@@ -379,7 +389,8 @@ class VideoService {
       commandParams.push(`--rt ${effective.ratio}`);
     }
     commandParams.push(`--dur ${effective.duration}`);
-    if (params.fps && params.fps !== model.default_fps) {
+    // 帧率与种子只接受整数：它们是命令串里的裸值，字符串会把别的命令夹带进去
+    if (Number.isInteger(params.fps) && params.fps !== model.default_fps) {
       commandParams.push(`--fps ${params.fps}`);
     }
     if (params.watermark === false) {
@@ -388,7 +399,7 @@ class VideoService {
     if (params.camera_fixed) {
       commandParams.push('--cf true');
     }
-    if (params.seed && params.seed !== -1) {
+    if (Number.isInteger(params.seed) && params.seed !== -1) {
       commandParams.push(`--seed ${params.seed}`);
     }
 

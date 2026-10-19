@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-10-19T08:09:18Z",
+  "updated_at": "2026-10-19T08:22:38Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -683,9 +683,9 @@
     },
     "backend/src/__tests__/unit/services/videoResolutionContract.test.js": {
       "role": "observe",
-      "sha256": "77106ecf184764640ef15c86ecf561f6bbd354b9202236c3d64a085f0bc00510",
-      "size": 11234,
-      "normalized_sha256": "77106ecf184764640ef15c86ecf561f6bbd354b9202236c3d64a085f0bc00510"
+      "sha256": "6dcbbbda5732cd7f2942ec82c7b15a94f132842896d64ce7cfb6cad694bbce75",
+      "size": 16491,
+      "normalized_sha256": "6dcbbbda5732cd7f2942ec82c7b15a94f132842896d64ce7cfb6cad694bbce75"
     },
     "backend/src/__tests__/unit/services/websiteArtifactAssets.test.js": {
       "role": "observe",
@@ -2299,9 +2299,9 @@
       "normalized_sha256": "75de793cbeeec1a3c9e6060e1006b6a658a48e86d41ae95dad8a7f4e0ad4c42e"
     },
     "backend/src/services/videoService.js": {
-      "sha256": "8bd1bbda2ddd79dde875282d1bdb1f03a804f511ae6ed5a00987d0dfebb14d94",
-      "size": 24999,
-      "normalized_sha256": "8bd1bbda2ddd79dde875282d1bdb1f03a804f511ae6ed5a00987d0dfebb14d94"
+      "sha256": "d3dc4a33941e9c2474af2f356e8aee20cd1c976e9b869c3b54b2147b10a22994",
+      "size": 26073,
+      "normalized_sha256": "d3dc4a33941e9c2474af2f356e8aee20cd1c976e9b869c3b54b2147b10a22994"
     },
     "backend/src/services/websiteArtifact/assets.js": {
       "sha256": "0ffa5ab286e543fe9cf357f6b73105d53c64712ca9d87448ccfdd5a1e4c2e56b",
