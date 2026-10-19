@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-10-15T04:56:46Z",
+  "updated_at": "2026-10-19T08:09:18Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "e93605373762d19d1eaaa9573943e4c069936a078899e886995cae4bd6f0a0d7",
-      "size": 391693,
-      "normalized_sha256": "e93605373762d19d1eaaa9573943e4c069936a078899e886995cae4bd6f0a0d7"
+      "sha256": "84fdf62ad5f4316c7c332c365706341b234171fedc7955f3b9fdf2c3a00dae97",
+      "size": 391787,
+      "normalized_sha256": "84fdf62ad5f4316c7c332c365706341b234171fedc7955f3b9fdf2c3a00dae97"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -680,6 +680,12 @@
       "sha256": "9bbb03ba45275eb056d7ea10c3cf1d78b4891b70bf6664caa9b784f666f1a532",
       "size": 30926,
       "normalized_sha256": "9bbb03ba45275eb056d7ea10c3cf1d78b4891b70bf6664caa9b784f666f1a532"
+    },
+    "backend/src/__tests__/unit/services/videoResolutionContract.test.js": {
+      "role": "observe",
+      "sha256": "77106ecf184764640ef15c86ecf561f6bbd354b9202236c3d64a085f0bc00510",
+      "size": 11234,
+      "normalized_sha256": "77106ecf184764640ef15c86ecf561f6bbd354b9202236c3d64a085f0bc00510"
     },
     "backend/src/__tests__/unit/services/websiteArtifactAssets.test.js": {
       "role": "observe",
@@ -2293,10 +2299,9 @@
       "normalized_sha256": "75de793cbeeec1a3c9e6060e1006b6a658a48e86d41ae95dad8a7f4e0ad4c42e"
     },
     "backend/src/services/videoService.js": {
-      "role": "index",
-      "sha256": "57e43a26199778d534fc223524c4e1cd5db6bdcc7fdfd9a2219c34778092d611",
-      "size": 21346,
-      "normalized_sha256": "57e43a26199778d534fc223524c4e1cd5db6bdcc7fdfd9a2219c34778092d611"
+      "sha256": "8bd1bbda2ddd79dde875282d1bdb1f03a804f511ae6ed5a00987d0dfebb14d94",
+      "size": 24999,
+      "normalized_sha256": "8bd1bbda2ddd79dde875282d1bdb1f03a804f511ae6ed5a00987d0dfebb14d94"
     },
     "backend/src/services/websiteArtifact/assets.js": {
       "sha256": "0ffa5ab286e543fe9cf357f6b73105d53c64712ca9d87448ccfdd5a1e4c2e56b",

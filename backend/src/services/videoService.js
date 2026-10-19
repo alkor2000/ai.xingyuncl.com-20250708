@@ -5,6 +5,12 @@
  * v1.2 改动:
  * - submitToVolcano 增加 try/catch 提取上游响应体 response.data 写入日志
  * - 上游400/422错误时把火山返回的具体 message 抛出（替代 axios 默认的 "Request failed with status code 400"）
+ *
+ * v1.3 改动（2026-10-19，反馈 745765ba / SEEDANCE-RESOLUTION-20261019）:
+ * - 有效分辨率与时长一律显式写进火山文本命令（--rs / --dur）。旧写法只在"与平台默认值不同"时才发送，
+ *   而平台默认 720p、上游默认 1080p：用户选 720p（等于平台默认）或不选时都被上游按 1080p 生成并计费，
+ *   2026-10-19 核出 206 条。宽高比在文生视频下同样显式发送；图生视频未显式选择时仍交给上游自适应。
+ * - 有效参数由 resolveEffectiveParams 统一算出并校验：缺省取平台默认，非法或缺失即拒绝，绝不以"省略"落到上游默认。
  */
 
 const axios = require('axios');
@@ -83,11 +89,12 @@ class VideoService {
         throw new Error('用户不存在');
       }
 
-      // 3. 计算积分消耗
+      // 3. 算出生效参数（缺省取平台默认，非法即拒绝）并据此计算积分消耗——计费、落库、发给上游的必须是同一组值
+      const effective = this.resolveEffectiveParams(params, model);
       const creditsRequired = VideoModel.calculatePrice(
         model,
-        params.resolution || model.default_resolution,
-        params.duration || model.default_duration
+        effective.resolution,
+        effective.duration
       );
 
       if (!user.hasCredits(creditsRequired)) {
@@ -103,8 +110,8 @@ class VideoService {
         first_frame_image: params.first_frame_image,
         last_frame_image: params.last_frame_image,
         generation_mode: params.generation_mode || 'text_to_video',
-        resolution: params.resolution || model.default_resolution,
-        duration: params.duration || model.default_duration,
+        resolution: effective.resolution,
+        duration: effective.duration,
         fps: params.fps || model.default_fps,
         ratio: params.ratio || model.default_ratio,
         seed: params.seed || -1,
@@ -277,6 +284,8 @@ class VideoService {
         hasUrl: !!c.image_url,
         textPreview: c.text ? c.text.substring(0, 80) : null
       })),
+      /* v1.3: 命令参数单独记一份，提示词很长时 textPreview 看不到尾部的 --rs/--dur */
+      commandParams: textContent.includes(' --') ? textContent.slice(textContent.indexOf(' --') + 1) : '',
       return_last_frame: requestData.return_last_frame,
       has_callback: !!requestData.callback_url
     });
@@ -314,21 +323,62 @@ class VideoService {
   }
 
   /**
-   * 构建文本内容
+   * 算出这次请求真正生效的参数（用户给了用用户的，没给用平台默认），并做最后一道校验。
+   * 任何一项算不出合法值就抛错，而不是把它从命令里省掉——省掉就等于交给上游默认，那正是 1080p 多收费的根源。
+   * @param {Object} params - 请求参数
+   * @param {Object} model - 视频模型配置（含 default_* 与 *_supported）
+   * @returns {{ resolution: string, duration: number, ratio: string|null, ratioExplicit: boolean, isImageMode: boolean }}
+   */
+  static resolveEffectiveParams(params, model) {
+    const supported = (list) => (Array.isArray(list) && list.length > 0 ? list : null);
+
+    const resolution = params.resolution || model.default_resolution;
+    const resolutionsSupported = supported(model.resolutions_supported);
+    const resolutionOk = typeof resolution === 'string' && resolution.trim() !== '' && (
+      resolutionsSupported ? resolutionsSupported.includes(resolution) : /^(\d{3,4}p|\d{2,4}x\d{2,4})$/i.test(resolution)
+    );
+    if (!resolutionOk) {
+      throw new Error(`不支持的分辨率: ${resolution === undefined || resolution === null || resolution === '' ? '（空）' : resolution}`);
+    }
+
+    const rawDuration = params.duration !== undefined && params.duration !== null && params.duration !== '' ? params.duration : model.default_duration;
+    const duration = Number(rawDuration);
+    const durationsSupported = supported(model.durations_supported);
+    const durationOk = Number.isInteger(duration) && duration > 0 && (
+      durationsSupported ? durationsSupported.map(Number).includes(duration) : true
+    );
+    if (!durationOk) {
+      throw new Error(`不支持的时长: ${rawDuration === undefined || rawDuration === null ? '（空）' : rawDuration}`);
+    }
+
+    const ratioExplicit = typeof params.ratio === 'string' && params.ratio.trim() !== '';
+    const ratio = ratioExplicit ? params.ratio : (model.default_ratio || null);
+    const ratiosSupported = supported(model.ratios_supported);
+    if (ratio && ratiosSupported && !ratiosSupported.includes(ratio)) {
+      throw new Error(`不支持的宽高比: ${ratio}`);
+    }
+
+    const mode = params.generation_mode || 'text_to_video';
+    const isImageMode = mode !== 'text_to_video' || Boolean(params.first_frame_image) || Boolean(params.last_frame_image);
+
+    return { resolution, duration, ratio, ratioExplicit, isImageMode };
+  }
+
+  /**
+   * 构建文本内容（火山方舟文本命令）
+   * 分辨率与时长永远显式写出；宽高比在文生视频下显式写出，图生视频只在用户明确选择时写出（否则上游按图片自适应）。
+   * 其余可选项（帧率/水印/固定镜头/种子）沿用原有"非默认才写"的做法。
    */
   static buildTextContent(params, model) {
     let text = params.prompt;
     const commandParams = [];
+    const effective = this.resolveEffectiveParams(params, model);
 
-    if (params.resolution && params.resolution !== model.default_resolution) {
-      commandParams.push(`--rs ${params.resolution}`);
+    commandParams.push(`--rs ${effective.resolution}`);
+    if (effective.ratio && (!effective.isImageMode || effective.ratioExplicit)) {
+      commandParams.push(`--rt ${effective.ratio}`);
     }
-    if (params.ratio && params.ratio !== model.default_ratio) {
-      commandParams.push(`--rt ${params.ratio}`);
-    }
-    if (params.duration && params.duration !== model.default_duration) {
-      commandParams.push(`--dur ${params.duration}`);
-    }
+    commandParams.push(`--dur ${effective.duration}`);
     if (params.fps && params.fps !== model.default_fps) {
       commandParams.push(`--fps ${params.fps}`);
     }
