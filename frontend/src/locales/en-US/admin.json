@@ -1,4 +1,6 @@
 {
+  "admin.sso.loginSequence": "First, have your backend POST JSON to /api/auth/sso with the signed login parameters in the request body. On success, read data.accessToken and data.refreshToken from the response, then navigate the browser with GET to /auth/sso-callback?token=…&refreshToken=… on the same target site. Tokens cannot replace the signed parameters in the first request; the callback page does not accept POST.",
+  "admin.sso.stableIdentity": "Send the same uuid (or legacy username) on every login for an account. Use the provider's permanent user ID; never generate a random ID or append a timestamp per login. The name field is for display only and cannot identify or merge accounts. Repeat logins reuse the account and retain its credits, group and history.",
   "admin.modules.checkHealth.reason.builtin": "Built-in module; individual features are not checked here.",
   "admin.modules.checkHealth.reason.reachable": "Module address reachable (HTTP {{status}}). Authenticated features need separate verification.",
   "admin.modules.checkHealth.reason.auth_required": "Module reachable but requires authentication or authorization (HTTP {{status}}).",

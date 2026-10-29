@@ -609,6 +609,14 @@ const SSOSettings = () => {
               {t('admin.sso.signatureRuleDetail', '签名主体为用户唯一标识 uuid。')}
             </Paragraph>
 
+            <Paragraph>
+              {t('admin.sso.stableIdentity')}
+            </Paragraph>
+
+            <Paragraph>
+              {t('admin.sso.loginSequence')}
+            </Paragraph>
+
             <h4>{t('admin.sso.multiPlatformMode', '一、多平台模式（推荐，按平台落不同组）')}</h4>
             <Paragraph type="secondary">
               {t('admin.sso.multiPlatformModeDesc', '请求体携带 platform_key，使用对应平台的密钥与算法计算签名。')}
@@ -653,7 +661,7 @@ signature = MD5(uuid + timestamp + 全局共享密钥)`}
             <h4>{t('admin.sso.phpExample', 'PHP 示例（多平台模式）')}</h4>
             <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 4, overflow: 'auto' }}>
 {`<?php
-$uuid         = 'external-user-id-123';
+$uuid         = 'external-user-id-123'; // 该账号永久不变的用户ID，不是每次登录新生成的UUID
 $name         = '张三';
 $platform_key = 'school_a';          // 与后台平台标识一致
 $timestamp    = time();
@@ -677,13 +685,34 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 
 $response = curl_exec($ch);
-curl_close($ch);
+$httpStatus = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+unset($ch);
+
+// 请求失败或目标接口返回非成功状态时，不进行登录跳转。
+if ($response === false || $httpStatus < 200 || $httpStatus >= 300) {
+    http_response_code(502);
+    exit('SSO login failed.');
+}
 
 $result = json_decode($response, true);
-if (!empty($result['success'])) {
-    // 使用返回的 accessToken / refreshToken 完成登录
-    // 例如下发到前端，或携带 token 跳转
+$tokens = is_array($result) ? ($result['data'] ?? null) : null;
+// 严格校验成功标志与双 Token；不将上游原始响应或凭据输出到页面。
+if (!is_array($result) || ($result['success'] ?? false) !== true
+    || !is_array($tokens)
+    || !isset($tokens['accessToken'], $tokens['refreshToken'])
+    || !is_string($tokens['accessToken']) || !is_string($tokens['refreshToken'])
+    || trim($tokens['accessToken']) === '' || trim($tokens['refreshToken']) === '') {
+    http_response_code(502);
+    exit('SSO login failed.');
 }
+
+// Token 位于响应的 data 内；浏览器以 GET 打开同一目标站点的回调页面。
+$callbackUrl = '${window.location.origin}/auth/sso-callback?token='
+    . rawurlencode($tokens['accessToken'])
+    . '&refreshToken=' . rawurlencode($tokens['refreshToken']);
+// 此示例用于浏览器直接访问的 PHP 页面，须在输出正文前发送跳转头。
+header('Location: ' . $callbackUrl, true, 303);
+exit;
 ?>`}
             </pre>
           </div>

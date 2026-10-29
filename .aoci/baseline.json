@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-10-19T08:22:38Z",
+  "updated_at": "2026-10-29T00:04:02Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "84fdf62ad5f4316c7c332c365706341b234171fedc7955f3b9fdf2c3a00dae97",
-      "size": 391787,
-      "normalized_sha256": "84fdf62ad5f4316c7c332c365706341b234171fedc7955f3b9fdf2c3a00dae97"
+      "sha256": "d4b7c23308ea106d7ad7be18700ae40e46942b3c597f2ceaafb8fb7cd6e6836d",
+      "size": 391905,
+      "normalized_sha256": "d4b7c23308ea106d7ad7be18700ae40e46942b3c597f2ceaafb8fb7cd6e6836d"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -3318,10 +3318,9 @@
       "normalized_sha256": "0eed4bd011ea9b15fd5d1f92f0e9c10b3473217c6b37426d94c4710d721fc772"
     },
     "frontend/src/components/admin/settings/SSOSettings.jsx": {
-      "role": "index",
-      "sha256": "e8696ff3aa0cd4518025805b351b171691cc16e06d1c4f55970401ec7fbf8cda",
-      "size": 22693,
-      "normalized_sha256": "e8696ff3aa0cd4518025805b351b171691cc16e06d1c4f55970401ec7fbf8cda"
+      "sha256": "ed488176241ece50064f229941546bdfdf625e908bd42fee0283d113a142cacb",
+      "size": 24036,
+      "normalized_sha256": "ed488176241ece50064f229941546bdfdf625e908bd42fee0283d113a142cacb"
     },
     "frontend/src/components/admin/settings/SmartAppSettings.jsx": {
       "role": "index",
@@ -4039,9 +4038,9 @@
       "normalized_sha256": "0d41d579dd786f26d21930aa1dc6d83e392cd43170f5fa7910954e8b023ee61a"
     },
     "frontend/src/locales/en-US/admin.json": {
-      "sha256": "d12e08520068beaa1739a35960436b354fa2f964b69c859db77d1c223b67cf6a",
-      "size": 45796,
-      "normalized_sha256": "d12e08520068beaa1739a35960436b354fa2f964b69c859db77d1c223b67cf6a"
+      "sha256": "6ec48e6cd1a5efd6e6cdef29c36956edda3ca4fd096f6dbf4a459827b0c7a7de",
+      "size": 46575,
+      "normalized_sha256": "6ec48e6cd1a5efd6e6cdef29c36956edda3ca4fd096f6dbf4a459827b0c7a7de"
     },
     "frontend/src/locales/en-US/agent.json": {
       "sha256": "0ae8505af0ea2ca1f07d2380cd86fa7110eee28837cefe65dd0f4c00053d8b6d",
@@ -4142,9 +4141,9 @@
       "normalized_sha256": "e4423d9b0f13a924cd8f8ba197af095cc224b11d5ba340f7db9dea217ce311a0"
     },
     "frontend/src/locales/zh-CN/admin.json": {
-      "sha256": "013feef51c4e3ae0e2980e26fd4ff7fcd6ae12d76dc565786348e5a158617010",
-      "size": 44183,
-      "normalized_sha256": "013feef51c4e3ae0e2980e26fd4ff7fcd6ae12d76dc565786348e5a158617010"
+      "sha256": "6392dd71f8e77f6ca46e6b5a6144c2f9a7ae94fb95ded1ab50dc885db7a0cb90",
+      "size": 44887,
+      "normalized_sha256": "6392dd71f8e77f6ca46e6b5a6144c2f9a7ae94fb95ded1ab50dc885db7a0cb90"
     },
     "frontend/src/locales/zh-CN/agent.json": {
       "sha256": "0d49b37db3bcb96caac5c66568f6a884644a75e916e602ca922c94ad3620aad0",

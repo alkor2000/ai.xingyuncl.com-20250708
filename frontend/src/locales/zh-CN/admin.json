@@ -1,4 +1,6 @@
 {
+  "admin.sso.loginSequence": "先由对接方后端 POST JSON 到 /api/auth/sso，签名参数放在请求正文中。成功后从响应 data.accessToken 和 data.refreshToken 取值，再让浏览器 GET 打开同一站点的 /auth/sso-callback?token=…&refreshToken=…。token 和 refreshToken 不能代替第一步的签名参数；回调页面不接受 POST。",
+  "admin.sso.stableIdentity": "同一账号每次登录必须传相同的 uuid（或旧接口的 username），建议使用对接方永久用户 ID，不能每次随机生成或拼接时间戳。name 仅用于显示，不能用姓名匹配或合并账号。重复登录复用原账号，保留原积分、用户组和历史记录。",
   "admin.modules.checkHealth.reason.builtin": "内置模块由平台提供，本检查不验证具体业务功能",
   "admin.modules.checkHealth.reason.reachable": "模块地址可达（HTTP {{status}}），登录后功能仍需单独验证",
   "admin.modules.checkHealth.reason.auth_required": "模块可达，但需要认证或授权（HTTP {{status}}）",
