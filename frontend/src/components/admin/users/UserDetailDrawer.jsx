@@ -60,7 +60,7 @@ const UserDetailDrawer = ({
             <div><strong>{t('admin.users.table.id')}:</strong> {user.id}</div>
           </Col>
           <Col span={12}>
-            <div><strong>{t('admin.users.table.username')}:</strong> {user.username}</div>
+            <div><strong>{t('admin.users.table.username')}:</strong> {user.display_name || user.username}</div>
           </Col>
           <Col span={12}>
             <div><strong>{t('admin.users.table.email')}:</strong> {user.email}</div>

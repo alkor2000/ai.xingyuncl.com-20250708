@@ -284,16 +284,16 @@ class SSOService {
    *   首次从哪个平台进来落到哪个组，后续从其他平台进来仍保持原组，
    *   避免密钥泄露导致用户被反复搬组，也不覆盖管理员的手动调整。
    *
-   * @param {Object} params - { uuid, name }（name 为不可信展示字段，已在控制器层截断）
+   * @param {Object} params - { uuid, name, display_name }（两个名称都仅作不可信展示，不参与身份匹配）
    * @param {Object} ssoContext - validateSSORequest 返回的路由上下文
    * @returns {Object} 用户实例
    * @throws {Error} 用户状态异常或账号过期时抛出（statusCode=403）
    */
   static async handleSSOUser(params, ssoContext) {
-    const { uuid, name } = params;
+    const { uuid, name, display_name } = params;
 
     // 查找或创建用户（仅新建时使用 target_group_id / default_credits）
-    const user = await User.createOrUpdateSSOUser({
+    let user = await User.createOrUpdateSSOUser({
       uuid,
       name,
       group_id: ssoContext.target_group_id || 1,
@@ -301,6 +301,12 @@ class SSOService {
         ssoContext.default_credits !== undefined ? ssoContext.default_credits : 100,
       credits_expire_days: 365
     });
+
+    // Fill the display name for new and existing automatically named SSO accounts.
+    // Admin-chosen names and UUID links are never overwritten.
+    if (display_name && user.status === 'active' && !user.isAccountExpired()) {
+      user = await user.syncSSODisplayName(display_name);
+    }
 
     // 检查用户状态
     if (user.status !== 'active') {

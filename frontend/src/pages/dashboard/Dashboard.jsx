@@ -470,7 +470,7 @@ const Dashboard = () => {
         <div className="welcome-content">
           <Title level={isMobile ? 5 : 4} style={{ margin: 0 }}>
             {/* 整句插值：中英文的问候语与称呼语序不同，交由语言包组织 */}
-            {t('dashboard.welcome', { greeting: getGreeting(), name: user?.username || user?.email })}
+            {t('dashboard.welcome', { greeting: getGreeting(), name: user?.display_name || user?.username || user?.email })}
           </Title>
           <div className="date-info">
             <Space size={isMobile ? 8 : 12}>

@@ -229,7 +229,7 @@ const Profile = () => {
     setLoading(true)
     try {
       await updateProfile({
-        username: values.username,
+        ...(user?.uuid_source === 'sso' ? {} : { username: values.username }),
         phone: values.phone || null
       })
       message.success(t('profile.update.success'))
@@ -428,7 +428,11 @@ const Profile = () => {
                 >
                   <Row gutter={16}>
                     <Col span={12}>
-                      <Form.Item
+                      {user?.uuid_source === 'sso' ? (
+                        <Form.Item label={t('profile.form.username')}>
+                          <Input value={user?.display_name || user?.username} prefix={<UserOutlined />} disabled />
+                        </Form.Item>
+                      ) : <Form.Item
                         name="username"
                         label={t('profile.form.username')}
                         rules={[
@@ -437,7 +441,7 @@ const Profile = () => {
                         ]}
                       >
                         <Input prefix={<UserOutlined />} />
-                      </Form.Item>
+                      </Form.Item>}
                     </Col>
                     <Col span={12}>
                       <Form.Item

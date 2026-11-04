@@ -24,6 +24,7 @@ const crypto = require('crypto');
 const dbConnection = require('../database/connection');
 const { DatabaseError, ValidationError } = require('../utils/errors');
 const logger = require('../utils/logger');
+const { normalizeSSODisplayName } = require('../utils/ssoDisplayName');
 
 class User {
   constructor(userData) {
@@ -32,7 +33,9 @@ class User {
 
   // 转换为JSON（隐藏敏感信息）
   toJSON() {
-    const { password_hash, password_reset_token, email_verification_token, ...safeUser } = this;
+    const { password_hash, password_reset_token, email_verification_token,
+      sso_display_name, sso_display_name_locked, ...safeUser } = this;
+    safeUser.display_name = this.getDisplayName();
     
     // 添加积分统计信息
     if (this.credits_quota !== undefined && this.used_credits !== undefined) {
@@ -59,6 +62,28 @@ class User {
     safeUser.can_view_chat_history = this.can_view_chat_history === 1 || this.can_view_chat_history === true;
     
     return safeUser;
+  }
+
+  getDisplayName() {
+    // Exact generated name, never a prefix match; manually named accounts win.
+    const automatic = this.uuid_source === 'sso' && typeof this.uuid === 'string' &&
+      this.username === `sso_${this.uuid.substring(0, 8)}`;
+    return (automatic && !this.sso_display_name_locked && normalizeSSODisplayName(this.sso_display_name)) ||
+      this.username || this.email;
+  }
+
+  async syncSSODisplayName(value) {
+    const name = normalizeSSODisplayName(value);
+    if (!name || this.uuid_source !== 'sso' || typeof this.uuid !== 'string' ||
+        this.sso_display_name_locked || this.username !== `sso_${this.uuid.substring(0, 8)}`) return this;
+    // Atomic predicate protects a concurrent administrator rename. Re-read afterwards
+    // so a lost race cannot return stale identity, permissions or display text.
+    await dbConnection.query(`UPDATE users SET sso_display_name = ?, updated_at = NOW()
+      WHERE id = ? AND uuid_source = 'sso' AND BINARY username = ?
+        AND sso_display_name_locked = 0 AND deleted_at IS NULL`, [name, this.id, this.username]);
+    const current = await User.findById(this.id);
+    if (!current) throw new ValidationError('用户不存在');
+    return current;
   }
 
   /**
@@ -425,8 +450,8 @@ class User {
       }
 
       if (search) {
-        whereConditions.push('(u.username LIKE ? OR u.email LIKE ? OR u.uuid LIKE ?)');
-        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        whereConditions.push('(u.username LIKE ? OR u.email LIKE ? OR u.uuid LIKE ? OR u.sso_display_name LIKE ?)');
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
       }
 
       const whereClause = whereConditions.length > 0 
@@ -585,6 +610,11 @@ class User {
         updateData.credits_expire_at = null;
         updateFields.push('credits_expire_at');
         logger.info('检测到积分已过期，修改配额时自动清除积分有效期', { userId: this.id });
+      }
+
+      if (this.uuid_source === 'sso' && updateFields.includes('username') && updateData.username !== this.username) {
+        updateData = { ...updateData, sso_display_name: null, sso_display_name_locked: 1 };
+        updateFields.push('sso_display_name', 'sso_display_name_locked');
       }
 
       const setClause = updateFields.map(field => `${field} = ?`).join(', ');

@@ -114,7 +114,7 @@ const Header = ({ isMobile, onMenuClick }) => {
             <Space className="user-info" style={{ cursor: 'pointer' }}>
               <UserOutlined style={{ fontSize: '16px', color: '#666' }} />
               <span className="user-name">
-                {user?.username || user?.email}
+                {user?.display_name || user?.username || user?.email}
               </span>
             </Space>
           </Dropdown>

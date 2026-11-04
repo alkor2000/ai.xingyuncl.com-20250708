@@ -118,7 +118,8 @@ const UserTable = ({
     {
       title: t('admin.users.table.username'),
       dataIndex: 'username',
-      key: 'username'
+      key: 'username',
+      render: (username, record) => record.display_name || username
     },
     {
       title: t('admin.users.table.email'),

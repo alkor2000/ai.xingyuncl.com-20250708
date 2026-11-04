@@ -537,6 +537,11 @@ class UserService {
             finalUpdateData.expire_at = newExpireAt;
           }
 
+          // This branch writes directly in the group-change transaction, bypassing User.update.
+          if (user.uuid_source === 'sso' && finalUpdateData.username !== undefined && finalUpdateData.username !== user.username) {
+            finalUpdateData.sso_display_name = null;
+            finalUpdateData.sso_display_name_locked = 1;
+          }
           const updateFields = Object.keys(finalUpdateData);
           const setClause = updateFields.map(field => `${field} = ?`).join(', ');
           const values = updateFields.map(field => finalUpdateData[field]);

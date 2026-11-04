@@ -43,6 +43,7 @@ const logger = require('../utils/logger');
 
 // SSO name 字段为不可信展示输入，最大保留长度（超出截断，防止恶意超长字符串写入备注）
 const SSO_NAME_MAX_LENGTH = 100;
+const { normalizeSSODisplayName } = require('../utils/ssoDisplayName');
 
 class AuthControllerRefactored {
 
@@ -206,7 +207,12 @@ class AuthControllerRefactored {
       // name 经截断后传入，作为不可信展示字段
       const safeName = AuthControllerRefactored._sanitizeSSOName(name);
       const user = await SSOService.handleSSOUser(
-        { uuid: uuid || username, name: safeName },
+        {
+          uuid: uuid || username,
+          name: safeName,
+          // Both names are presentation only; uuid/legacy subject still owns identity.
+          display_name: normalizeSSODisplayName(username) || normalizeSSODisplayName(name)
+        },
         ssoContext
       );
 
