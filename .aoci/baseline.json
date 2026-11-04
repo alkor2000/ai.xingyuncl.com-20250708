@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-10-29T00:04:02Z",
+  "updated_at": "2026-11-04T03:09:11Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "d4b7c23308ea106d7ad7be18700ae40e46942b3c597f2ceaafb8fb7cd6e6836d",
-      "size": 391905,
-      "normalized_sha256": "d4b7c23308ea106d7ad7be18700ae40e46942b3c597f2ceaafb8fb7cd6e6836d"
+      "sha256": "12609f044a970050e67f4e147a8a47c6695ccbba8d3f2b98101ba18b0f5b969a",
+      "size": 391697,
+      "normalized_sha256": "12609f044a970050e67f4e147a8a47c6695ccbba8d3f2b98101ba18b0f5b969a"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -177,6 +177,11 @@
       "sha256": "a27aeb38d05ec71d031a77b8ea6c944b76bff19e224252ae941de962ad6997e2",
       "size": 2427,
       "normalized_sha256": "a27aeb38d05ec71d031a77b8ea6c944b76bff19e224252ae941de962ad6997e2"
+    },
+    "backend/migrations/20261104_001_sso_display_name.js": {
+      "sha256": "2c85191e11de3985b8b85dfe65b702b7b0e9ec4453331bbbe67a55eeede69fc5",
+      "size": 623,
+      "normalized_sha256": "2c85191e11de3985b8b85dfe65b702b7b0e9ec4453331bbbe67a55eeede69fc5"
     },
     "backend/package-lock.json": {
       "sha256": "6b5c6fbecc22f6bc591cc3aa1c07fd48a8b619822851290ea091c87b6c878b3c",
@@ -422,6 +427,12 @@
       "sha256": "d7627ba936b75a2076fac991149b483a87ad6c74e1c9d81879a688b60d0f2147",
       "size": 14726,
       "normalized_sha256": "d7627ba936b75a2076fac991149b483a87ad6c74e1c9d81879a688b60d0f2147"
+    },
+    "backend/src/__tests__/unit/models/User.sso-display.test.js": {
+      "role": "observe",
+      "sha256": "4889fb6098d2d5864ee773b15cde6aa1b6db7df7fad7ffe39649d04e28f8c4f1",
+      "size": 11194,
+      "normalized_sha256": "4889fb6098d2d5864ee773b15cde6aa1b6db7df7fad7ffe39649d04e28f8c4f1"
     },
     "backend/src/__tests__/unit/routes/artifactHandoffEntry.test.js": {
       "role": "observe",
@@ -792,10 +803,9 @@
       "normalized_sha256": "ab80b79dd020459dae771a5f74f0c28bf1fbcde16a98e0eb23bf8d8936ba61c5"
     },
     "backend/src/controllers/AuthControllerRefactored.js": {
-      "role": "index",
-      "sha256": "c7cba7646494ccae7bcefcade579a6b25857766bd4b72507a7c14ad9cd81367f",
-      "size": 34984,
-      "normalized_sha256": "c7cba7646494ccae7bcefcade579a6b25857766bd4b72507a7c14ad9cd81367f"
+      "sha256": "f21cd88bf4d6f167e918656f8d5cfa4161121ac819cff94e2851305c7cf6bb17",
+      "size": 35264,
+      "normalized_sha256": "f21cd88bf4d6f167e918656f8d5cfa4161121ac819cff94e2851305c7cf6bb17"
     },
     "backend/src/controllers/CalendarController.js": {
       "role": "index",
@@ -1346,9 +1356,9 @@
       "normalized_sha256": "48b90ec3d2c5f3f34a89d7523e4e76942cb43991eb86e3db0a244a1de6a6d44d"
     },
     "backend/src/models/User.js": {
-      "sha256": "8ab5187320d618071e6381b2aa2bb47e0f61fcefdf2537383f7bae6abe591412",
-      "size": 53095,
-      "normalized_sha256": "8ab5187320d618071e6381b2aa2bb47e0f61fcefdf2537383f7bae6abe591412"
+      "sha256": "60fd3ce0cbeeb75e7079270c73c1e96b20eea25a07be00e751943f44fedafc40",
+      "size": 54831,
+      "normalized_sha256": "60fd3ce0cbeeb75e7079270c73c1e96b20eea25a07be00e751943f44fedafc40"
     },
     "backend/src/models/UserFile.js": {
       "role": "index",
@@ -1771,10 +1781,9 @@
       "normalized_sha256": "9cb1f5f44e4e3d26e6e63c124ddb87a2d678a09fa98432d9a35e936fff940289"
     },
     "backend/src/services/admin/UserService.js": {
-      "role": "index",
-      "sha256": "6c1d411ce6d3f87ac5103cc60a8d93dac043865640126a7e14b86e9598b00382",
-      "size": 38262,
-      "normalized_sha256": "6c1d411ce6d3f87ac5103cc60a8d93dac043865640126a7e14b86e9598b00382"
+      "sha256": "92e7975081ca67890bf4b4d2400f236b7a15e02835ec82ae166f224d46de9973",
+      "size": 38613,
+      "normalized_sha256": "92e7975081ca67890bf4b4d2400f236b7a15e02835ec82ae166f224d46de9973"
     },
     "backend/src/services/admin/UserTagService.batch.js": {
       "role": "index",
@@ -2016,10 +2025,9 @@
       "normalized_sha256": "7f8198e449c09318218ee57c59d14b067b468df2b1fba7a930778e63b962d0d1"
     },
     "backend/src/services/auth/SSOService.js": {
-      "role": "index",
-      "sha256": "a90b7e626de0f09b027573d09d22959c8e3ed6bf69edabb664cb6aa62aebd524",
-      "size": 12877,
-      "normalized_sha256": "a90b7e626de0f09b027573d09d22959c8e3ed6bf69edabb664cb6aa62aebd524"
+      "sha256": "7718ee44ce3e5751a0508c08d938130f5b0701df8cfb7c83d8b31c3922350a12",
+      "size": 13200,
+      "normalized_sha256": "7718ee44ce3e5751a0508c08d938130f5b0701df8cfb7c83d8b31c3922350a12"
     },
     "backend/src/services/auth/SiteConfigService.js": {
       "role": "index",
@@ -2386,6 +2394,11 @@
       "sha256": "f2a1b95d5eb807c0be2cbbaae047f35c35f72e1ac7871020f0f0c4591bd8ed7c",
       "size": 2192,
       "normalized_sha256": "f2a1b95d5eb807c0be2cbbaae047f35c35f72e1ac7871020f0f0c4591bd8ed7c"
+    },
+    "backend/src/utils/ssoDisplayName.js": {
+      "sha256": "511c697ada62f965adc2cc24212e84692e3d7897007f4f4e4d106cba93afb17c",
+      "size": 409,
+      "normalized_sha256": "511c697ada62f965adc2cc24212e84692e3d7897007f4f4e4d106cba93afb17c"
     },
     "backend/src/utils/tokenCalculator.js": {
       "role": "index",
@@ -3491,10 +3504,9 @@
       "normalized_sha256": "e17139441e76e31bf3dd4a4502739bb12f5b70d4273def3c71ae76e6f46b82e5"
     },
     "frontend/src/components/admin/users/UserDetailDrawer.jsx": {
-      "role": "index",
-      "sha256": "e5e37546fae845eb633c71d75e2dcf753a1e4eff60f284dc06a246d03fadf74d",
-      "size": 7570,
-      "normalized_sha256": "e5e37546fae845eb633c71d75e2dcf753a1e4eff60f284dc06a246d03fadf74d"
+      "sha256": "eb454b49c497f213c0a4344954383746e277598ff31a331e8883064395075b8e",
+      "size": 7591,
+      "normalized_sha256": "eb454b49c497f213c0a4344954383746e277598ff31a331e8883064395075b8e"
     },
     "frontend/src/components/admin/users/UserFormModal.jsx": {
       "role": "index",
@@ -3527,10 +3539,9 @@
       "normalized_sha256": "14c075aaa7f43929acd4fa65c2a53c9600a879f9978f45c7b28a4d0c1f117753"
     },
     "frontend/src/components/admin/users/UserTable.jsx": {
-      "role": "index",
-      "sha256": "1579908b3023f35249a5afc44210d3defac30fc25727970805825cc1547301a5",
-      "size": 15746,
-      "normalized_sha256": "1579908b3023f35249a5afc44210d3defac30fc25727970805825cc1547301a5"
+      "sha256": "735f26c62ee6e38f34c910b630f7b5ae70746a468b864cbba88577878d454f00",
+      "size": 15815,
+      "normalized_sha256": "735f26c62ee6e38f34c910b630f7b5ae70746a468b864cbba88577878d454f00"
     },
     "frontend/src/components/admin/users/UserTagFilter.jsx": {
       "role": "index",
@@ -4012,9 +4023,9 @@
       "normalized_sha256": "16579688c1b71bef061a6743cb9c18d5b3a414ea69de40d46a6cb9cbfbdc6431"
     },
     "frontend/src/layouts/BasicLayout/Header.jsx": {
-      "sha256": "dab11788d520e2b507c21221d5e8e098ce3b244125b5b9fc3bb00652d920c9c6",
-      "size": 3792,
-      "normalized_sha256": "dab11788d520e2b507c21221d5e8e098ce3b244125b5b9fc3bb00652d920c9c6"
+      "sha256": "de67d5bf363a61965faaa7b5f80157f9d6761ded0b9444bf26b9bfd529eab18a",
+      "size": 3814,
+      "normalized_sha256": "de67d5bf363a61965faaa7b5f80157f9d6761ded0b9444bf26b9bfd529eab18a"
     },
     "frontend/src/layouts/BasicLayout/MobileDrawer.jsx": {
       "sha256": "fe78d806bcdd881404fd0aed96c7e99978a1b4b5cfc2d8d20ae829e5d7f6c8a0",
@@ -4768,10 +4779,9 @@
       "normalized_sha256": "6d6e7ace62a83cb5ccea33902b4ee5fb23fe19fde1c85bad0c4ecca2dcad7fb8"
     },
     "frontend/src/pages/dashboard/Dashboard.jsx": {
-      "role": "index",
-      "sha256": "a0597650a85b3acb77449f76f46e7ba3ef8cb2cdf8050a6aa6d494595a4130a7",
-      "size": 28609,
-      "normalized_sha256": "a0597650a85b3acb77449f76f46e7ba3ef8cb2cdf8050a6aa6d494595a4130a7"
+      "sha256": "24e4bef62ab7fc6e7fd7dc7d7d734649bcb07db9c758d8134bc9266fcb480fa0",
+      "size": 28631,
+      "normalized_sha256": "24e4bef62ab7fc6e7fd7dc7d7d734649bcb07db9c758d8134bc9266fcb480fa0"
     },
     "frontend/src/pages/dashboard/Dashboard.less": {
       "role": "index",
@@ -5058,10 +5068,9 @@
       "normalized_sha256": "f451a72fec29a6071203164982c2d864a5753ee786c1665384d77d2d5d5c3391"
     },
     "frontend/src/pages/profile/Profile.jsx": {
-      "role": "index",
-      "sha256": "8431a2961b37eda2013d66c38094c63548b49cdf39fc65ba1c0efb0cadd2b187",
-      "size": 21878,
-      "normalized_sha256": "8431a2961b37eda2013d66c38094c63548b49cdf39fc65ba1c0efb0cadd2b187"
+      "sha256": "25f0015e8c66c23a257af8bfb3eb656044ba8e4e0244e122aea27396b73833a6",
+      "size": 22206,
+      "normalized_sha256": "25f0015e8c66c23a257af8bfb3eb656044ba8e4e0244e122aea27396b73833a6"
     },
     "frontend/src/pages/profile/Profile.less": {
       "role": "index",
