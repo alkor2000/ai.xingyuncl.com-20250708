@@ -55,6 +55,8 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      BAIDU_CENSOR_API_KEY: ${BAIDU_CENSOR_API_KEY:-}
+      BAIDU_CENSOR_SECRET_KEY: ${BAIDU_CENSOR_SECRET_KEY:-}
       PORT: 4000
       DB_HOST: mysql
       DB_PORT: 3306
@@ -116,6 +118,7 @@ services:
       P03_HANDOFF_TIMEOUT_MS: "${P03_HANDOFF_TIMEOUT_MS:-5000}"
     volumes:
       - ./storage/uploads:/app/storage/uploads
+      - ./storage/image-safety:/app/storage/image-safety
       - ./logs/backend:/app/logs
     networks:
       - ai-network

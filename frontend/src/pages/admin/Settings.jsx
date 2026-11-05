@@ -1,3 +1,4 @@
+import ImageModerationSettings from '../../components/admin/settings/ImageModerationSettings';
 /**
  * 系统设置主页面 - 支持组管理员权限控制和系统配置持久化
  * 
@@ -419,6 +420,11 @@ const Settings = () => {
         key: 'forumManagement',
         label: <span><CommentOutlined />{t('forum.admin.title')}</span>,
         children: <ForumManagement />
+      },
+      {
+        key: 'imageModeration',
+        label: t('image.moderation.title'),
+        children: <ImageModerationSettings />
       },
       {
         key: 'imageModels',

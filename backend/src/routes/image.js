@@ -38,6 +38,7 @@ const upload = multer({
 
 // 所有路由需要登录
 router.use(authenticate);
+router.use(require('./imageSafety'));
 
 // 获取可用的图像模型列表
 router.get('/models', ImageController.getModels);
@@ -78,7 +79,7 @@ router.post('/generation/:id/public', ImageController.togglePublic);
 router.get('/gallery', ImageController.getPublicGallery);
 
 // Webhook接收（用于Midjourney回调，不需要认证）
-router.post('/webhook/midjourney', ImageController.webhook);
+router.post('/webhook/midjourney', (_req, res) => res.status(410).json({ success: false, message: 'Provider polling is required' }));
 
 // ========== 管理端路由 ==========
 

@@ -1,3 +1,4 @@
+import ProtectedImage from '../../../../components/common/ProtectedImage';
 /**
  * 参考图片上传组件
  * 支持图生图功能的模型使用
@@ -58,6 +59,7 @@ const ReferenceUploader = ({
 
       if (response.data.success) {
         const uploadedImage = {
+          thumbUrl: await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }),
           uid: file.uid,
           name: file.name,
           status: 'done',
@@ -155,7 +157,7 @@ const ReferenceUploader = ({
       {/* 图片预览Modal */}
       {previewUrl && (
         <div className="image-preview-modal" onClick={handleClosePreview}>
-          <img src={previewUrl} alt={t('common.preview')} />
+          <ProtectedImage native src={previewUrl} alt={t('common.preview')} />
           <Button 
             className="close-button" 
             icon={<DeleteOutlined />} 

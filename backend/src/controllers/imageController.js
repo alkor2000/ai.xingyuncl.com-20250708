@@ -14,6 +14,7 @@ const ResponseHelper = require('../utils/response');
 const logger = require('../utils/logger');
 const ossService = require('../services/ossService');
 const crypto = require('crypto');
+const safety = require('../services/imageSafetyService');
 
 class ImageController {
   /**
@@ -44,47 +45,10 @@ class ImageController {
         return ResponseHelper.validation(res, null, '请选择要上传的图片');
       }
       
-      await ossService.initialize();
-      
-      const timestamp = Date.now();
-      const random = crypto.randomBytes(8).toString('hex');
-      const originalName = req.file.originalname;
-      const ext = originalName.substring(originalName.lastIndexOf('.'));
-      const fileName = `ref_${userId}_${timestamp}_${random}${ext}`;
-      
-      const dateFolder = new Date().toISOString().slice(0, 7);
-      const ossKey = `image-reference/${userId}/${dateFolder}/${fileName}`;
-      
-      const uploadResult = await ossService.uploadFile(req.file.buffer, ossKey, {
-        headers: {
-          'Content-Type': req.file.mimetype,
-          'Content-Disposition': `inline; filename="${fileName}"`
-        }
-      });
-      
-      if (!uploadResult.success) {
-        throw new Error('文件上传失败');
-      }
-      
-      logger.info('参考图片上传成功', {
-        userId,
-        fileName,
-        ossKey,
-        isLocal: uploadResult.isLocal,
-        url: uploadResult.url
-      });
-      
-      return ResponseHelper.success(res, {
-        url: uploadResult.url,
-        ossKey: ossKey,
-        fileName: fileName,
-        size: req.file.size,
-        mimeType: req.file.mimetype
-      }, '图片上传成功');
-      
+      return ResponseHelper.success(res, await safety.uploadReference(userId, req.file.buffer));
     } catch (error) {
       logger.error('上传参考图片失败:', error);
-      return ResponseHelper.error(res, error.message || '图片上传失败');
+      return ResponseHelper.error(res, error.message || '图片上传失败', error.statusCode || 500);
     }
   }
 
@@ -124,10 +88,11 @@ class ImageController {
           prompt,
           negative_prompt,
           size,
-          mode
+          mode,
+          base64Array: req.body.base64Array || []
         });
         
-        return ResponseHelper.success(res, result, result.message);
+        return ResponseHelper.success(res, await safety.project(result), result.message);
       } else {
         const errors = ImageService.validateGenerationParams(req.body);
         if (errors.length > 0) {
@@ -159,7 +124,7 @@ class ImageController {
             reference_images
           });
           
-          return ResponseHelper.success(res, result, '图片生成成功');
+          return ResponseHelper.success(res, await safety.project(result), '图片生成成功');
         } else {
           const result = await ImageService.generateImages(userId, model_id, {
             prompt,
@@ -173,7 +138,7 @@ class ImageController {
           
           if (result.succeeded > 0) {
             const message = `成功生成 ${result.succeeded}/${result.requested} 张图片，消耗 ${result.creditsConsumed} 积分`;
-            return ResponseHelper.success(res, result, message);
+            return ResponseHelper.success(res, await safety.project(result), message);
           } else {
             return ResponseHelper.error(res, '所有图片生成失败');
           }
@@ -186,7 +151,7 @@ class ImageController {
         return ResponseHelper.error(res, error.message, 402);
       }
       
-      return ResponseHelper.error(res, error.message || '图片生成失败');
+      return ResponseHelper.error(res, error.message || '图片生成失败', error.statusCode || 500);
     }
   }
   
@@ -216,7 +181,7 @@ class ImageController {
       
       const result = await MidjourneyService.submitAction(userId, generation_id, action, index);
       
-      return ResponseHelper.success(res, result, result.message);
+      return ResponseHelper.success(res, await safety.project(result), result.message);
     } catch (error) {
       logger.error('Midjourney操作失败:', error);
       
@@ -246,33 +211,7 @@ class ImageController {
         return ResponseHelper.forbidden(res, '无权查看此任务');
       }
       
-      if (generation.task_status === 'SUBMITTED' || generation.task_status === 'IN_PROGRESS') {
-        try {
-          const model = await ImageModel.findById(generation.model_id);
-          if (model) {
-            const taskData = await MidjourneyService.fetchTaskStatus(task_id, model);
-            
-            return ResponseHelper.success(res, {
-              id: generation.id,
-              task_id: generation.task_id,
-              status: generation.status,
-              task_status: taskData.status || generation.task_status,
-              progress: taskData.progress || generation.progress,
-              image_url: taskData.imageUrl || generation.image_url,
-              local_path: generation.local_path,
-              thumbnail_path: generation.thumbnail_path,
-              buttons: generation.buttons,
-              prompt: generation.prompt,
-              created_at: generation.created_at,
-              updated_at: generation.updated_at
-            });
-          }
-        } catch (error) {
-          logger.warn('查询Midjourney任务状态失败，返回缓存状态', { task_id, error: error.message });
-        }
-      }
-      
-      return ResponseHelper.success(res, generation);
+      return ResponseHelper.success(res, await safety.project(generation));
     } catch (error) {
       logger.error('获取任务状态失败:', error);
       return ResponseHelper.error(res, '获取任务状态失败');
@@ -293,7 +232,7 @@ class ImageController {
         status
       });
       
-      return ResponseHelper.success(res, result);
+      return ResponseHelper.success(res, await safety.project(result));
     } catch (error) {
       logger.error('获取Midjourney任务列表失败:', error);
       return ResponseHelper.error(res, '获取任务列表失败');
@@ -344,7 +283,7 @@ class ImageController {
         keyword: keyword || null
       });
       
-      return ResponseHelper.success(res, result);
+      return ResponseHelper.success(res, await safety.project(result));
     } catch (error) {
       logger.error('获取生成历史失败:', error);
       return ResponseHelper.error(res, '获取历史记录失败');
@@ -365,7 +304,7 @@ class ImageController {
         return ResponseHelper.notFound(res, '记录不存在');
       }
       
-      if (generation.user_id !== userId && !generation.is_public) {
+      if (generation.user_id !== userId && (!generation.is_public || (await safety.get(id)).state !== 'pass')) {
         return ResponseHelper.forbidden(res, '无权查看此记录');
       }
       
@@ -373,7 +312,7 @@ class ImageController {
         await ImageGeneration.incrementViewCount(id);
       }
       
-      return ResponseHelper.success(res, generation);
+      return ResponseHelper.success(res, await safety.project(generation));
     } catch (error) {
       logger.error('获取生成记录失败:', error);
       return ResponseHelper.error(res, '获取记录失败');
@@ -477,7 +416,7 @@ class ImageController {
         keyword: keyword || null
       });
       
-      return ResponseHelper.success(res, result);
+      return ResponseHelper.success(res, await safety.project(result));
     } catch (error) {
       logger.error('获取公开画廊失败:', error);
       return ResponseHelper.error(res, '获取画廊失败');
@@ -501,18 +440,10 @@ class ImageController {
         return ResponseHelper.forbidden(res, '无权操作此记录');
       }
       
-      const success = await ImageGeneration.update(id, {
-        is_public: generation.is_public ? 0 : 1
-      });
-      
-      if (!success) {
-        return ResponseHelper.error(res, '操作失败');
-      }
-      
-      return ResponseHelper.success(res, null, '操作成功');
+      return ResponseHelper.success(res, await safety.publish(id, userId));
     } catch (error) {
       logger.error('切换公开状态失败:', error);
-      return ResponseHelper.error(res, '操作失败');
+      return ResponseHelper.error(res, error.message || '操作失败', error.statusCode || 500);
     }
   }
 

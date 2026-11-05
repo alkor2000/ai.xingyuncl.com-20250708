@@ -1,3 +1,5 @@
+import api from '../../../../utils/api';
+import ProtectedImage from '../../../../components/common/ProtectedImage';
 /**
  * 图片卡片组件
  *
@@ -34,7 +36,7 @@
  */
 
 import React, { memo, useCallback, useState } from 'react';
-import { Card, Button, Space, Tooltip, Tag, Image, Spin, Progress, Popconfirm, message } from 'antd';
+import { Card, Button, Space, Tooltip, Tag, Image, Spin, Progress, Popconfirm, Modal, Input, message } from 'antd';
 import {
   EyeOutlined,
   DownloadOutlined,
@@ -153,7 +155,9 @@ const ImageCard = memo(({
       className={`history-card ${isMj ? 'midjourney-card' : ''} ${isFailed ? 'failed-card' : ''}`}
       cover={
         <div className="image-wrapper">
-          {isProcessing ? (
+          {item.moderation_status && item.moderation_status !== 'pass' && !isProcessing ? (
+            <div className="processing-overlay"><WarningOutlined /><Tag>{t(`image.moderation.${item.moderation_status}`)}</Tag><p>{t('image.moderation.held')}</p></div>
+          ) : isProcessing ? (
             /* ===== 生成中 ===== */
             <div className="processing-overlay">
               <Spin size="large" />
@@ -197,7 +201,7 @@ const ImageCard = memo(({
           ) : hasImage ? (
             /* ===== 正常展示图片 + 悬浮操作条 ===== */
             <>
-              <Image
+              <ProtectedImage
                 src={hasImage}
                 /* alt 用提示词，属业务数据不翻译 */
                 alt={item.prompt}
@@ -207,6 +211,18 @@ const ImageCard = memo(({
               />
               <div className="image-overlay">
                 <Space>
+                  {item.username && <Button type="text" onClick={e => {
+                    e.stopPropagation();
+                    let reason = '';
+                    Modal.confirm({ title: t('image.moderation.report'),
+                      content: <Input.TextArea maxLength={500} placeholder={t('image.moderation.reportReason')} onChange={event => { reason = event.target.value; }} />,
+                      onOk: async () => {
+                        if (!reason.trim()) throw new Error(t('image.moderation.reportReason'));
+                        await api.post(`/image/generation/${item.id}/report`, { reason });
+                        message.success(t('image.moderation.reportSent'));
+                      }
+                    });
+                  }}>{t('image.moderation.report')}</Button>}
                   <Tooltip title={t('image.viewLarge')}>
                     <Button
                       type="text"

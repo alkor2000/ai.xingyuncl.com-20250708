@@ -65,7 +65,7 @@ class ImageGeneration {
       const allowedFields = [
         'image_url', 'local_path', 'thumbnail_path', 'file_size',
         'status', 'error_message', 'credits_consumed', 'generation_time',
-        'is_favorite', 'is_public',
+        'is_favorite',
         'task_id', 'task_status', 'buttons', 'grid_layout', 'prompt_en',
         'parent_id', 'action_type', 'action_index', 'generation_mode',
         'progress', 'mj_custom_id', 'fail_reason'
@@ -294,7 +294,8 @@ class ImageGeneration {
       } = options;
 
       const offset = (page - 1) * limit;
-      const conditions = ['ig.is_public = 1', 'ig.status = "success"'];
+      const conditions = ['ig.is_public = 1',
+        "EXISTS (SELECT 1 FROM image_safety s WHERE s.generation_id=ig.id AND s.state='pass' AND s.file_key IS NOT NULL)", 'ig.status = "success"'];
       const params = [];
 
       if (model_id) {

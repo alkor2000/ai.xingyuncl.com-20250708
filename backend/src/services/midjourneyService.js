@@ -4,6 +4,7 @@
  */
 
 const axios = require('axios');
+const safety = require('./imageSafetyService');
 const crypto = require('crypto');
 const ImageModel = require('../models/ImageModel');
 const ImageGeneration = require('../models/ImageGeneration');
@@ -72,6 +73,8 @@ class MidjourneyService {
    * @param {array} params.base64Array - 垫图base64数组（可选，用于图生图）
    */
   static async submitImagine(userId, modelId, params) {
+    await safety.checkPrompt(userId, params.prompt, params.negative_prompt || '');
+    params = { ...params, base64Array: await safety.inlineReferences(userId, params.base64Array || []) };
     try {
       // 1. 获取模型配置
       const model = await ImageModel.findById(modelId);
@@ -222,6 +225,8 @@ class MidjourneyService {
    * 提交Action任务（U/V操作）
    */
   static async submitAction(userId, parentGenerationId, action, index) {
+    await safety.assertUser(userId);
+    if ((await safety.get(parentGenerationId)).state !== 'pass') throw safety.error('原图须审核通过后才能继续生成');
     try {
       // 1. 获取父生成记录
       const parentGeneration = await ImageGeneration.findById(parentGenerationId);
@@ -464,7 +469,7 @@ class MidjourneyService {
           
           // 只有映射后的状态是有效值才更新
           if (mappedStatus && mappedStatus !== 'NOT_START') {
-            updateData.task_status = mappedStatus;
+            updateData.task_status = mappedStatus === 'SUCCESS' ? 'IN_PROGRESS' : mappedStatus;
           }
           
           if (Object.keys(updateData).length > 0) {
@@ -502,7 +507,7 @@ class MidjourneyService {
 
           // 更新生成记录
           await ImageGeneration.update(generationId, {
-            image_url: taskData.imageUrl,
+            image_url: null,
             local_path: localPath,
             thumbnail_path: thumbnailPath,
             file_size: fileSize,
@@ -634,86 +639,9 @@ class MidjourneyService {
    * 处理Webhook回调
    */
   static async handleWebhook(data) {
-    try {
-      logger.info('收到Midjourney Webhook回调', data);
-      
-      // 解析state获取generationId和userId
-      const state = JSON.parse(data.state || '{}');
-      const { generationId, userId } = state;
-      
-      if (!generationId) {
-        logger.warn('Webhook回调缺少generationId');
-        return;
-      }
-
-      // 如果state中没有userId，尝试从数据库获取
-      let actualUserId = userId;
-      if (!actualUserId) {
-        try {
-          const generation = await ImageGeneration.findById(generationId);
-          if (generation) {
-            actualUserId = generation.user_id;
-            logger.info('从数据库获取userId', { generationId, userId: actualUserId });
-          }
-        } catch (e) {
-          logger.error('无法获取userId', { generationId, error: e.message });
-        }
-      }
-
-      // 映射状态
-      const mappedStatus = this.mapTaskStatus(data.status);
-
-      // 根据状态更新生成记录
-      if (mappedStatus === 'SUCCESS') {
-        const imageService = require('./imageService');
-        const { localPath, thumbnailPath, fileSize } = await imageService.downloadAndSaveImage(
-          data.imageUrl,
-          generationId,
-          actualUserId  // 传递userId
-        );
-
-        // 生成按钮数据
-        let buttons = null;
-        if (data.buttons && data.buttons.length > 0) {
-          buttons = data.buttons;
-        } else {
-          buttons = this.generateStandardButtons(data.id || data.taskId);
-        }
-
-        await ImageGeneration.update(generationId, {
-          image_url: data.imageUrl,
-          local_path: localPath,
-          thumbnail_path: thumbnailPath,
-          file_size: fileSize,
-          status: 'success',
-          task_status: 'SUCCESS',
-          task_id: data.id || data.taskId,
-          buttons: JSON.stringify(buttons),
-          prompt_en: data.promptEn,
-          grid_layout: 1
-        });
-      } else if (mappedStatus === 'FAILURE') {
-        await ImageGeneration.update(generationId, {
-          status: 'failed',
-          task_status: 'FAILURE',
-          error_message: data.failReason || '生成失败',
-          fail_reason: data.failReason
-        });
-      } else {
-        await ImageGeneration.update(generationId, {
-          task_status: mappedStatus,
-          progress: data.progress ? String(data.progress) : null
-        });
-      }
-
-      return true;
-    } catch (error) {
-      logger.error('处理Midjourney Webhook失败', {
-        error: error.message,
-        data
-      });
-      return false;
-    }
+    // Webhook payloads are untrusted. Completion is handled only by authenticated
+    // polling against the configured provider; a posted URL/state cannot publish pixels.
+    return false;
   }
 
   /**
@@ -751,7 +679,7 @@ class MidjourneyService {
       const result = await dbConnection.simpleQuery(query, [...params, limit, offset]);
 
       return {
-        data: result.rows,
+        data: result.rows.map(({ id, generation_id, task_id, action, status, submit_time, finish_time }) => ({ id, generation_id, task_id, action, status, submit_time, finish_time })),
         pagination: {
           page,
           limit,

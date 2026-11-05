@@ -1,3 +1,5 @@
+import api from '../../../utils/api';
+import { protectedImagePath } from '../../../components/common/ProtectedImage';
 /**
  * 图像处理辅助函数
  */
@@ -98,6 +100,15 @@ export const resolveImageDownloadUrl = (url) => {
  * @returns {Promise<{ status: 'downloaded'|'opened'|'missing-url'|'failed'|'blocked', fileName?: string, httpStatus?: number, detail?: 'network'|'timeout'|'body'|'not-image'|'unknown-type'|string, url?: string }>}
  */
 export const downloadImage = async (url, filename, options = {}) => {
+  const protectedPath = protectedImagePath(url);
+  if (protectedPath) {
+    try {
+      const response = await api.get(protectedPath, { responseType: 'blob' });
+      if (!response.data.type.startsWith('image/')) return { status: 'failed', detail: 'not-image' };
+      downloadBlob(response.data, filename || 'image.jpg');
+      return { status: 'downloaded', fileName: filename };
+    } catch { return { status: 'failed', detail: 'protected-image' }; }
+  }
   const target = resolveImageDownloadUrl(url);
   if (!target) return { status: 'missing-url' };
   const href = target.href;

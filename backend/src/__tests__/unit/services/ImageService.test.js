@@ -344,10 +344,10 @@ describe('ImageService - 图像生成服务', () => {
       expect(errors.some(e => e.includes('URL'))).toBe(true);
     });
 
-    test('参考图片URL合法：应通过', () => {
+    test('审核参考图句柄格式合法：应通过', () => {
       const errors = ImageService.validateGenerationParams({
         prompt: '测试',
-        reference_images: ['https://example.com/img.jpg']
+        reference_images: ['/api/image/reference/00000000-0000-4000-8000-000000000001']
       });
       expect(errors).toEqual([]);
     });

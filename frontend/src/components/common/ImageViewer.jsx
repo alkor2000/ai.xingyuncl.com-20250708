@@ -1,3 +1,4 @@
+import ProtectedImage from './ProtectedImage';
 /**
  * 通用图片查看器组件
  * 支持：缩放、拖动、多图切换、下载、键盘快捷键
@@ -466,7 +467,7 @@ const ImageViewer = ({
           )}
 
           {imageUrl && (
-            <img
+            <ProtectedImage native
               ref={imageRef}
               src={imageUrl}
               /* alt 取业务数据，无则留空（装饰性图片留空 alt 符合无障碍规范） */
@@ -508,7 +509,7 @@ const ImageViewer = ({
                   onClick={() => setCurrentIndex(index)}
                 >
                   {/* 缩略图为纯装饰，alt 留空避免读屏软件重复朗读 */}
-                  <img src={thumbUrl} alt="" />
+                  <ProtectedImage native src={thumbUrl} alt="" />
                 </div>
               );
             })}

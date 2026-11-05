@@ -33,6 +33,8 @@
  */
 
 const axios = require('axios');
+const safety = require('./imageSafetyService');
+const safeDownload = require('./safeImageDownload');
 const crypto = require('crypto');
 const sharp = require('sharp');
 const ImageModel = require('../models/ImageModel');
@@ -422,6 +424,8 @@ class ImageService {
    * 批量生成图片
    */
   static async generateImages(userId, modelId, params, quantity = 1) {
+    await safety.checkPrompt(userId, params.prompt, params.negative_prompt || '');
+    params = { ...params, reference_images: await safety.references(userId, params.reference_images || []) };
     const actualQuantity = Math.min(Math.max(1, quantity), 4);
     
     try {
@@ -619,7 +623,7 @@ class ImageService {
       const { localPath, thumbnailPath, fileSize } = await this.downloadAndSaveImage(imageUrl, generationId, userId);
 
       const updateData = {
-        image_url: imageUrl, local_path: localPath, thumbnail_path: thumbnailPath,
+        image_url: null, local_path: localPath, thumbnail_path: thumbnailPath,
         file_size: fileSize, status: 'success', generation_time: Date.now() - startTime
       };
       
@@ -660,30 +664,8 @@ class ImageService {
 
   // 下载并保存图片
   static async downloadAndSaveImage(imageUrl, generationId, userId) {
-    try {
-      const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 30000 });
-      const imageBuffer = Buffer.from(response.data);
-      await ossService.initialize();
-      
-      const dateFolder = new Date().toISOString().slice(0, 7);
-      const timestamp = Date.now();
-      const random = crypto.randomBytes(8).toString('hex');
-      const fileName = `gen_${generationId}_${timestamp}_${random}.jpg`;
-      const thumbFileName = `thumb_${generationId}_${timestamp}_${random}.jpg`;
-      const ossKey = `generations/${userId}/${dateFolder}/${fileName}`;
-      const thumbOssKey = `generations/${userId}/${dateFolder}/${thumbFileName}`;
-      
-      const thumbnailBuffer = await sharp(imageBuffer).resize(400, 400, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
-      
-      const uploadResult = await ossService.uploadFile(imageBuffer, ossKey, { headers: { 'Content-Type': 'image/jpeg' } });
-      const thumbResult = await ossService.uploadFile(thumbnailBuffer, thumbOssKey, { headers: { 'Content-Type': 'image/jpeg' } });
-      
-      logger.info('图片已保存', { generationId, userId, ossKey });
-      return { localPath: uploadResult.url, thumbnailPath: thumbResult.url, fileSize: imageBuffer.length };
-    } catch (error) {
-      logger.error('下载保存图片失败', { imageUrl, generationId, userId, error: error.message });
-      throw new Error('保存图片失败: ' + error.message);
-    }
+    const buffer = await safeDownload.download(imageUrl);
+    return safety.capture(generationId, userId, buffer);
   }
 
   // 删除图片文件
@@ -734,7 +716,7 @@ class ImageService {
     }
     if (params.reference_images?.length > 0) {
       for (const url of params.reference_images) {
-        if (!url.startsWith('http')) { errors.push('参考图片URL格式不正确'); break; }
+        if (typeof url !== 'string' || !url.startsWith('/api/image/reference/')) { errors.push('参考图片URL格式不正确'); break; }
       }
     }
     return errors;

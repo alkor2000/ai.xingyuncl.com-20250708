@@ -17,6 +17,9 @@
  */
 
 const crypto = require('crypto');
+const safety = require('./imageSafetyService');
+const censor = require('./imageCensorProvider');
+const safeDownload = require('./safeImageDownload');
 const logger = require('../utils/logger');
 const ossService = require('./ossService');
 const dbConnection = require('../database/connection');
@@ -149,13 +152,9 @@ class ImageGenerationService {
                   logger.warn('Base64格式匹配失败');
                 }
               } else if (imageUrl.startsWith('http')) {
-                // 如果是HTTP URL，直接记录
-                result.images.push({
-                  url: imageUrl,
-                  filename: `external_${i}.png`,
-                  mime_type: 'image/png'
-                });
-                logger.info('记录外部图片URL', { url: imageUrl });
+                const bytes = await safeDownload.download(imageUrl);
+                const saved = await this.saveGeneratedImage(bytes.toString('base64'), 'image/jpeg', messageId, userId);
+                if (saved) result.images.push(saved);
               }
             } else {
               logger.warn(`第${i + 1}张图片没有找到有效的URL`, {
@@ -251,6 +250,15 @@ class ImageGenerationService {
    */
   static async saveGeneratedImage(base64Data, mimeType, messageId, userId = null) {
     try {
+      if (!userId) throw safety.error('无法确定图片所属用户', 403);
+      await safety.assertUser(userId);
+      if (typeof base64Data !== 'string' || base64Data.length > 28 * 1024 * 1024) throw safety.error('图片大小超出限制', 400);
+      const artifact = await safety.putImage(Buffer.from(base64Data, 'base64'));
+      const { rows: blocked } = await dbConnection.query("SELECT generation_id FROM image_safety WHERE sha256=? AND state='block' LIMIT 1", [artifact.sha]);
+      const decision = blocked.length ? { state: 'block', reason: 'blocked_fingerprint' } : await censor.image(artifact.buffer);
+      await safety.event(dbConnection.query.bind(dbConnection), null, userId, 'chat_output', decision.state, `message:${messageId} ${decision.reason}`.slice(0, 500), artifact.sha);
+      if (decision.state !== 'pass') throw safety.error('生成图片未通过审核或审核暂不可用', 403);
+      mimeType = 'image/jpeg';
       // 确定文件扩展名
       const ext = mimeType.split('/')[1] || 'png';
       const timestamp = Date.now();
@@ -258,7 +266,7 @@ class ImageGenerationService {
       const filename = `gen_${messageId}_${timestamp}_${randomStr}.${ext}`;
 
       // 将Base64转换为Buffer
-      const buffer = Buffer.from(base64Data, 'base64');
+      const buffer = artifact.buffer;
 
       // 初始化OSS服务（会自动读取配置）
       await ossService.initialize();

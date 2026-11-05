@@ -1,3 +1,4 @@
+import ProtectedImage from '../../../../components/common/ProtectedImage';
 import React from 'react';
 import { Button, Empty, Image, Progress, Space, Spin, Tag, Typography } from 'antd';
 import { RedoOutlined } from '@ant-design/icons';
@@ -33,12 +34,12 @@ export default function ConversationArea({ t, turns, itemById, generating, progr
               {items.map(item => {
                 const url = getImageUrl(item);
                 return url ? (
-                  <Image key={item.id} src={url} alt={turn.prompt} preview={false}
+                  <ProtectedImage key={item.id} src={url} alt={turn.prompt} preview={false}
                     onClick={() => onView(item, turn)} placeholder={<Spin />} />
                 ) : (
                   <div className="studio-turn-pending" key={item.id}>
                     <Spin size="small" />
-                    <Tag>{t('image.studio.stillRunning')}</Tag>
+                    <Tag>{t(item.moderation_status && item.moderation_status !== 'pass' ? 'image.moderation.held' : 'image.studio.stillRunning')}</Tag>
                   </div>
                 );
               })}

@@ -30,6 +30,7 @@ COPY --chown=nodejs:nodejs backend/src ./src
 # 复制 Knex 配置和迁移文件（2026-01-27 新增）
 COPY --chown=nodejs:nodejs backend/knexfile.js ./
 COPY --chown=nodejs:nodejs backend/migrations ./migrations
+COPY --chown=nodejs:nodejs backend/scripts/image-safety-sweep.js ./scripts/image-safety-sweep.js
 # 复制 AI训练专区预置数据包（2026-09-14 新增；AiLabPresetService 默认读 /app/presets/ai-lab）
 COPY --chown=nodejs:nodejs backend/presets ./presets
 # 复制数据库迁移文件（旧的迁移方式，保留兼容）
@@ -54,4 +55,4 @@ EXPOSE 4000
 # 使用tini作为PID 1进程
 ENTRYPOINT ["/sbin/tini", "--"]
 # 启动应用（先以root执行迁移，然后切换用户启动应用）
-CMD ["/bin/sh", "-c", "/usr/local/bin/run-migrations.sh && su-exec nodejs node src/server.js"]
+CMD ["/bin/sh", "-c", "/usr/local/bin/run-migrations.sh && mkdir -p /app/storage/image-safety && chown nodejs:nodejs /app/storage/image-safety && chmod 700 /app/storage/image-safety && su-exec nodejs node src/server.js"]

@@ -407,6 +407,7 @@ const ImageGeneration = () => {
    * 相对路径需用 IMAGE_HOST 补全为绝对地址
    */
   const getBestImageUrl = (img) => {
+    if (img.local_path?.startsWith('/api/image/')) return img.local_path;
     if (img.local_path) {
       if (img.local_path.startsWith('http://') || img.local_path.startsWith('https://')) {
         return img.local_path;
@@ -442,7 +443,7 @@ const ImageGeneration = () => {
       return {
         id: img.id,
         url: url,
-        thumbnail_path: img.thumbnail_path?.startsWith('http')
+        thumbnail_path: (img.thumbnail_path?.startsWith('http') || img.thumbnail_path?.startsWith('/api/image/'))
           ? img.thumbnail_path
           : (img.thumbnail_path ? `${IMAGE_HOST}${img.thumbnail_path}` : url),
         title: img.prompt,
