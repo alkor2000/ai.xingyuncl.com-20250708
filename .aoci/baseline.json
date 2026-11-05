@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-11-05T12:55:35Z",
+  "updated_at": "2026-11-05T23:35:35Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -49,9 +49,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "ea8b1b1ae02d498fc6dc45cf8c9b5a10efad47a2ad10a3220afe0c544c56ddad",
-      "size": 394675,
-      "normalized_sha256": "ea8b1b1ae02d498fc6dc45cf8c9b5a10efad47a2ad10a3220afe0c544c56ddad"
+      "sha256": "e138ed81c886c264028ac7107429446c274bbc5f5c116c65a44c4353c63bbd7f",
+      "size": 396512,
+      "normalized_sha256": "e138ed81c886c264028ac7107429446c274bbc5f5c116c65a44c4353c63bbd7f"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -187,6 +187,11 @@
       "size": 2327,
       "normalized_sha256": "6fa42b6ef21030ac1903bd3cdc73d7ef47feb0d153d0c177bb188dc74b33ea8b"
     },
+    "backend/migrations/20261106_001_gallery_teacher_review.js": {
+      "sha256": "d1a81ba801f7535dba61fd8589b54341c21ec96eba6aff050f31b4e19d3eb8a7",
+      "size": 1613,
+      "normalized_sha256": "d1a81ba801f7535dba61fd8589b54341c21ec96eba6aff050f31b4e19d3eb8a7"
+    },
     "backend/package-lock.json": {
       "sha256": "6b5c6fbecc22f6bc591cc3aa1c07fd48a8b619822851290ea091c87b6c878b3c",
       "size": 348273,
@@ -217,6 +222,11 @@
       "sha256": "d841bffddd2dc4d416bf4b3527dcb9e2e66fecff0f6c3dca72782d8c838f1266",
       "size": 14075,
       "normalized_sha256": "d841bffddd2dc4d416bf4b3527dcb9e2e66fecff0f6c3dca72782d8c838f1266"
+    },
+    "backend/scripts/gallery-review-backfill.js": {
+      "sha256": "a6647cf8fb77d6dc7cc911999d57b0bbd388f9140b61e772aad2b0cb11cdc63e",
+      "size": 3326,
+      "normalized_sha256": "a6647cf8fb77d6dc7cc911999d57b0bbd388f9140b61e772aad2b0cb11cdc63e"
     },
     "backend/scripts/identity-enroll.cjs": {
       "role": "index",
@@ -355,9 +365,9 @@
     },
     "backend/src/__tests__/integration/imageSafety.standalone.cjs": {
       "role": "observe",
-      "sha256": "3b849c1e355ab73606ca24174a5a00e9c8e56cb16dcd8cf71e7b9975f005d626",
-      "size": 6639,
-      "normalized_sha256": "3b849c1e355ab73606ca24174a5a00e9c8e56cb16dcd8cf71e7b9975f005d626"
+      "sha256": "1c3d52b864ed05d3e09336901536450d4a6fec542f70ad03565bdd28d70921aa",
+      "size": 11454,
+      "normalized_sha256": "1c3d52b864ed05d3e09336901536450d4a6fec542f70ad03565bdd28d70921aa"
     },
     "backend/src/__tests__/integration/setup.js": {
       "role": "observe",
@@ -493,9 +503,9 @@
     },
     "backend/src/__tests__/unit/services/ImageSafety.test.js": {
       "role": "observe",
-      "sha256": "d8342e7c8a3a30279efff2a76b57890d3e804456335375d5c9f6ce09efe0f56e",
-      "size": 3269,
-      "normalized_sha256": "d8342e7c8a3a30279efff2a76b57890d3e804456335375d5c9f6ce09efe0f56e"
+      "sha256": "c931f8f8ad1a0a2b6e6f7c67db0b23af33e328e8ac1a6d2985fbff68bdced5cd",
+      "size": 3380,
+      "normalized_sha256": "c931f8f8ad1a0a2b6e6f7c67db0b23af33e328e8ac1a6d2985fbff68bdced5cd"
     },
     "backend/src/__tests__/unit/services/ImageService.test.js": {
       "role": "observe",
@@ -1052,9 +1062,9 @@
       "normalized_sha256": "4888377b470183a98c727838978582dee7ddc7ed016345bfcfd14d7736119c6e"
     },
     "backend/src/controllers/imageController.js": {
-      "sha256": "9592dcca88379c1be32a4d29d6df1f2eb86ea7ece8b6976eb817dcda601b238e",
-      "size": 17874,
-      "normalized_sha256": "9592dcca88379c1be32a4d29d6df1f2eb86ea7ece8b6976eb817dcda601b238e"
+      "sha256": "989520b9e20392fa1f592c3c0cee2d2883b94ae352313f09f2954a3661ee234d",
+      "size": 18066,
+      "normalized_sha256": "989520b9e20392fa1f592c3c0cee2d2883b94ae352313f09f2954a3661ee234d"
     },
     "backend/src/controllers/statsController.js": {
       "role": "index",
@@ -1310,9 +1320,9 @@
       "normalized_sha256": "f983ecd5607369e83df3d3d88ea3595496d518f0d651a3c8a4a38e131d74376f"
     },
     "backend/src/models/ImageGeneration.js": {
-      "sha256": "5ddd3e317745dc839301354790c414747db35d052a6b4f160a25588196948007",
-      "size": 12171,
-      "normalized_sha256": "5ddd3e317745dc839301354790c414747db35d052a6b4f160a25588196948007"
+      "sha256": "912baf8d4a952afaad448a38cd71dcdd348b9e0ad3338bf6bebda119834bea6c",
+      "size": 12278,
+      "normalized_sha256": "912baf8d4a952afaad448a38cd71dcdd348b9e0ad3338bf6bebda119834bea6c"
     },
     "backend/src/models/ImageModel.js": {
       "role": "index",
@@ -1643,6 +1653,11 @@
       "size": 7090,
       "normalized_sha256": "6efe634fd79f6238f60e0542ae8caf31a6ea18f94305a52f3fbe9eca3e57839d"
     },
+    "backend/src/routes/galleryReview.js": {
+      "sha256": "fefe9cca9dc0c97748bf47bdf7ae286fc2556a0b983bf19c1071f064971bd166",
+      "size": 1632,
+      "normalized_sha256": "fefe9cca9dc0c97748bf47bdf7ae286fc2556a0b983bf19c1071f064971bd166"
+    },
     "backend/src/routes/htmlEditor.js": {
       "role": "index",
       "sha256": "a7a3c6be781c44401b40e3482d1b604534d1bd45096654003cfa8bc05dd52d93",
@@ -1650,14 +1665,14 @@
       "normalized_sha256": "a7a3c6be781c44401b40e3482d1b604534d1bd45096654003cfa8bc05dd52d93"
     },
     "backend/src/routes/image.js": {
-      "sha256": "47d5765874909f477e731799de29c1b32951e6258a631ce70a7712ba8c15efa4",
-      "size": 3320,
-      "normalized_sha256": "47d5765874909f477e731799de29c1b32951e6258a631ce70a7712ba8c15efa4"
+      "sha256": "dd238dbd3b83dfa34024f8290c15bff7d93e24f92b6bb0c6400a7de73090aaa7",
+      "size": 3379,
+      "normalized_sha256": "dd238dbd3b83dfa34024f8290c15bff7d93e24f92b6bb0c6400a7de73090aaa7"
     },
     "backend/src/routes/imageSafety.js": {
-      "sha256": "a41abf1ff285be28d9044ae9186d3a8d5553e55ac50a24d0680fbcfdce163452",
-      "size": 6704,
-      "normalized_sha256": "a41abf1ff285be28d9044ae9186d3a8d5553e55ac50a24d0680fbcfdce163452"
+      "sha256": "5248cc6e06bc6f045acb95a63d9b33ad9a364787e25cbdb2b17a6a10284f9f86",
+      "size": 6729,
+      "normalized_sha256": "5248cc6e06bc6f045acb95a63d9b33ad9a364787e25cbdb2b17a6a10284f9f86"
     },
     "backend/src/routes/knowledgeRoutes.js": {
       "role": "index",
@@ -2192,6 +2207,11 @@
       "size": 368,
       "normalized_sha256": "3346269983a915b7807924cb7cca82db1d607327cfdd6e569f8156196a5b2196"
     },
+    "backend/src/services/galleryReviewService.js": {
+      "sha256": "7f9e6901e9880badc0df88d42b42031cdde36d2ad954ec2228e8a5d55aca0850",
+      "size": 4182,
+      "normalized_sha256": "7f9e6901e9880badc0df88d42b42031cdde36d2ad954ec2228e8a5d55aca0850"
+    },
     "backend/src/services/healthCheckService.js": {
       "role": "index",
       "sha256": "7f854189a98489cdf7f7cb4c37b32ba55c3cd573151d9c822a34877998cfac05",
@@ -2219,9 +2239,9 @@
       "normalized_sha256": "882a3ace416e11f81024f284853e8ed0f9a5d813b80819c0efdde0161257b144"
     },
     "backend/src/services/imageSafetyService.js": {
-      "sha256": "5bf3ec71db06ff32b399cc443cc3d4bdf15a3cc35127df21ce63876f2883a542",
-      "size": 11040,
-      "normalized_sha256": "5bf3ec71db06ff32b399cc443cc3d4bdf15a3cc35127df21ce63876f2883a542"
+      "sha256": "935c383ade760f622fd547f85c1a260416ab939bf00f3f04abd60d13db5b4111",
+      "size": 12146,
+      "normalized_sha256": "935c383ade760f622fd547f85c1a260416ab939bf00f3f04abd60d13db5b4111"
     },
     "backend/src/services/imageService.js": {
       "sha256": "be431c1f22a58c9f1dfb26031c0b3e41afcb902c395d116a5ecf9275aad6689c",
@@ -2512,9 +2532,9 @@
       "normalized_sha256": "ab4fd7d6f8cedfe71e5fcb2540c0ee94ec4ac72256ca7af47607d420e67170be"
     },
     "docker/Dockerfile.backend": {
-      "sha256": "5060536873f0aa7d5b186364d058b0a0dd0b58546b3a2fdda2f05d716ca96753",
-      "size": 2938,
-      "normalized_sha256": "5060536873f0aa7d5b186364d058b0a0dd0b58546b3a2fdda2f05d716ca96753"
+      "sha256": "5782ec53a113ec3dcd167f7ab903f097d41b754d172009346856f2c8198326ce",
+      "size": 3045,
+      "normalized_sha256": "5782ec53a113ec3dcd167f7ab903f097d41b754d172009346856f2c8198326ce"
     },
     "docker/Dockerfile.frontend": {
       "sha256": "6e3489f2dc7ea9427b3fbe8da341871918386e9433497e9edb470ab47cf9346f",
@@ -3201,6 +3221,11 @@
       "size": 19044,
       "normalized_sha256": "4f8a6904ae5b6effd28cacba7067269ea2ed896c837b828872ebca18f1773c1f"
     },
+    "frontend/src/components/admin/settings/GalleryReviewSettings.jsx": {
+      "sha256": "be419a903a3836eaaab30a70836f599466aa5c98686df5ff2e7d4e8c6b78443f",
+      "size": 4276,
+      "normalized_sha256": "be419a903a3836eaaab30a70836f599466aa5c98686df5ff2e7d4e8c6b78443f"
+    },
     "frontend/src/components/admin/settings/HtmlEditorSettings.jsx": {
       "sha256": "55face46eb503730639165043793101628f063e3a3a41a591c9c6766a1fad1b6",
       "size": 11553,
@@ -3846,9 +3871,9 @@
       "normalized_sha256": "c57a98bd219ee82ad482d39ae6d674797ec8ad336564982e9d40a3a80216387a"
     },
     "frontend/src/components/common/ProtectedImage.jsx": {
-      "sha256": "b970498a2b375845c102ffc67b4eade4b738225ecf7380dd6b618cba917199ba",
-      "size": 1857,
-      "normalized_sha256": "b970498a2b375845c102ffc67b4eade4b738225ecf7380dd6b618cba917199ba"
+      "sha256": "f21cc5bb5faf180d8f3e05fc7a0052d222980d7d00d8d1d574d551feb768587a",
+      "size": 1884,
+      "normalized_sha256": "f21cc5bb5faf180d8f3e05fc7a0052d222980d7d00d8d1d574d551feb768587a"
     },
     "frontend/src/components/docTemplate/ApplyPanel.jsx": {
       "sha256": "c7fa08e1308ef8025cb5a6795a6f75e7a716210140a538a7899205f2499dc08b",
@@ -4164,9 +4189,9 @@
       "normalized_sha256": "f699a3f865ab965e3166634c585c85c5838d6601938a12c36f022d99f0670fce"
     },
     "frontend/src/locales/en-US/image.json": {
-      "sha256": "136c6a1a4ed69b0afb03aa6bef4625cd32552e54e8f9862fd716d50a38ad00a4",
-      "size": 11861,
-      "normalized_sha256": "136c6a1a4ed69b0afb03aa6bef4625cd32552e54e8f9862fd716d50a38ad00a4"
+      "sha256": "0193095b761843df44936540e2419da77b045be5ecb8c798446fbc4710147e91",
+      "size": 12738,
+      "normalized_sha256": "0193095b761843df44936540e2419da77b045be5ecb8c798446fbc4710147e91"
     },
     "frontend/src/locales/en-US/index.js": {
       "role": "index",
@@ -4266,9 +4291,9 @@
       "normalized_sha256": "27bf64d06da9b9795cb838b9c1831010378e28accb7901c932cf9bcf99b9cad8"
     },
     "frontend/src/locales/zh-CN/image.json": {
-      "sha256": "fe10161519d419c8dc624ea6e86925c6e686e0c8ee4f2cecce1954af9561849b",
-      "size": 11615,
-      "normalized_sha256": "fe10161519d419c8dc624ea6e86925c6e686e0c8ee4f2cecce1954af9561849b"
+      "sha256": "65f328c1ad2ec6a6e1764dc8fcf70773e0ffdb408fe7ba094998d5429be0f00a",
+      "size": 12468,
+      "normalized_sha256": "65f328c1ad2ec6a6e1764dc8fcf70773e0ffdb408fe7ba094998d5429be0f00a"
     },
     "frontend/src/locales/zh-CN/index.js": {
       "role": "index",
@@ -4329,9 +4354,9 @@
       "normalized_sha256": "bfd378f58b2eff6b77e6d6dbe1dcbd361633d2e2f97bdb194f30256fdd091ee1"
     },
     "frontend/src/pages/admin/Settings.jsx": {
-      "sha256": "2bc32c04a11de7f3faddf6e347f6a10737d9703603fae89f836b3a611c12f9b0",
-      "size": 22840,
-      "normalized_sha256": "2bc32c04a11de7f3faddf6e347f6a10737d9703603fae89f836b3a611c12f9b0"
+      "sha256": "5806e881ac428ef1f69e58a7762a164330488479df1e307957005439fed77b13",
+      "size": 23037,
+      "normalized_sha256": "5806e881ac428ef1f69e58a7762a164330488479df1e307957005439fed77b13"
     },
     "frontend/src/pages/admin/Users.jsx": {
       "sha256": "6073ef3d91dd672f5b8747d87fe9a57ae79c34bc5c34024cdf9bb5224114053e",
@@ -4985,9 +5010,9 @@
       "normalized_sha256": "7550f82685fc2cfb1adeabf15734c3d91e8de206f836b5e82bc85d2bbf61ca1b"
     },
     "frontend/src/pages/image/components/ImageGallery/ImageCard.jsx": {
-      "sha256": "d6a2960a5950884b14450ab4f5300bd3d7998b9aa0ba42b27282ee16ccc5851c",
-      "size": 17852,
-      "normalized_sha256": "d6a2960a5950884b14450ab4f5300bd3d7998b9aa0ba42b27282ee16ccc5851c"
+      "sha256": "7f096111fe23aaad1268ab0166fd14c2b7587f016a6464ad97cbb61cd67cb3eb",
+      "size": 18366,
+      "normalized_sha256": "7f096111fe23aaad1268ab0166fd14c2b7587f016a6464ad97cbb61cd67cb3eb"
     },
     "frontend/src/pages/image/components/ImageGallery/MidjourneyActions.jsx": {
       "role": "index",
@@ -5308,10 +5333,9 @@
       "normalized_sha256": "a6b490d97ce27c86cd8d4bd2d6c0543390556f5f1872c58342660f2da6a4fa85"
     },
     "frontend/src/stores/imageStore.js": {
-      "role": "index",
-      "sha256": "64eb22221bb276e6336ee140e3e391bb62614056a428570a7f047be04711b455",
-      "size": 17956,
-      "normalized_sha256": "64eb22221bb276e6336ee140e3e391bb62614056a428570a7f047be04711b455"
+      "sha256": "88333d08b0056cf1f0deb9a8a6a016c575f83a39397398248633b8266134ec7b",
+      "size": 17951,
+      "normalized_sha256": "88333d08b0056cf1f0deb9a8a6a016c575f83a39397398248633b8266134ec7b"
     },
     "frontend/src/stores/knowledgeStore.js": {
       "role": "index",
