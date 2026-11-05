@@ -496,7 +496,7 @@ const useImageStore = create((set, get) => ({
       if (response.data.success) {
         set(state => ({
           generationHistory: state.generationHistory.map(item => 
-            item.id === id ? { ...item, is_public: !item.is_public } : item
+            item.id === id ? { ...item, ...response.data.data } : item
           )
         }));
         message.success(i18n.t('message.success'));

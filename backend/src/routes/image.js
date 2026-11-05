@@ -39,6 +39,7 @@ const upload = multer({
 // 所有路由需要登录
 router.use(authenticate);
 router.use(require('./imageSafety'));
+router.use('/gallery-review', require('./galleryReview'));
 
 // 获取可用的图像模型列表
 router.get('/models', ImageController.getModels);

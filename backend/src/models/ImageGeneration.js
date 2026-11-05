@@ -295,7 +295,7 @@ class ImageGeneration {
 
       const offset = (page - 1) * limit;
       const conditions = ['ig.is_public = 1',
-        "EXISTS (SELECT 1 FROM image_safety s WHERE s.generation_id=ig.id AND s.state='pass' AND s.file_key IS NOT NULL)", 'ig.status = "success"'];
+        "EXISTS (SELECT 1 FROM image_safety s WHERE s.generation_id=ig.id AND s.state='pass' AND s.file_key IS NOT NULL AND s.gallery_state='approved' AND s.gallery_reviewer_id IS NOT NULL AND s.gallery_reviewer_id<>ig.user_id)", 'ig.status = "success"'];
       const params = [];
 
       if (model_id) {

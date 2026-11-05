@@ -304,7 +304,8 @@ class ImageController {
         return ResponseHelper.notFound(res, '记录不存在');
       }
       
-      if (generation.user_id !== userId && (!generation.is_public || (await safety.get(id)).state !== 'pass')) {
+      const decision = await safety.get(id);
+      if (Number(generation.user_id) !== Number(userId) && (!generation.is_public || decision.state !== 'pass' || decision.gallery_state !== 'approved' || !decision.gallery_reviewer_id || Number(decision.gallery_reviewer_id) === Number(generation.user_id))) {
         return ResponseHelper.forbidden(res, '无权查看此记录');
       }
       

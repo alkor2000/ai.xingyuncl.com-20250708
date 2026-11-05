@@ -79,7 +79,7 @@ router.post('/admin/moderation/users/:id/restriction', limited, handle(async (re
   if (typeof restricted !== 'boolean' || typeof reason !== 'string' || !reason.trim() || reason.length > 500) throw safety.error('请填写账号处置原因', 400);
   await db.transaction(async query => {
     await query('INSERT INTO image_safety_restrictions (user_id,restricted,reason,actor_id) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE restricted=VALUES(restricted),reason=VALUES(reason),actor_id=VALUES(actor_id),updated_at=NOW()', [req.params.id, restricted, reason, req.user.id]);
-    if (restricted) await query('UPDATE image_generations SET is_public=0 WHERE user_id=?', [req.params.id]);
+    if (restricted) await query('UPDATE image_generations SET is_public=0,gallery_approved_by=NULL WHERE user_id=?', [req.params.id]);
     await safety.event(query, null, req.user.id, 'account_restriction', restricted ? 'block' : 'pass', `user:${req.params.id} ${reason}`.slice(0, 500));
   });
   ok(res, { restricted });

@@ -7,7 +7,7 @@ export function protectedImagePath(value) {
   if (typeof value !== 'string') return null;
   try {
     const url = new URL(value, window.location.origin);
-    return url.origin === window.location.origin && /^\/api\/image\/(generation\/\d+\/asset|admin\/moderation\/\d+\/asset|reference\/[a-f0-9-]+)$/.test(url.pathname)
+    return url.origin === window.location.origin && /^\/api\/image\/(generation\/\d+\/asset|admin\/moderation\/\d+\/asset|gallery-review\/\d+\/asset|reference\/[a-f0-9-]+)$/.test(url.pathname)
       ? `${url.pathname.slice(4)}${url.search}` : null;
   } catch { return null; }
 }

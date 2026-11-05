@@ -31,6 +31,7 @@ COPY --chown=nodejs:nodejs backend/src ./src
 COPY --chown=nodejs:nodejs backend/knexfile.js ./
 COPY --chown=nodejs:nodejs backend/migrations ./migrations
 COPY --chown=nodejs:nodejs backend/scripts/image-safety-sweep.js ./scripts/image-safety-sweep.js
+COPY --chown=nodejs:nodejs backend/scripts/gallery-review-backfill.js ./scripts/gallery-review-backfill.js
 # 复制 AI训练专区预置数据包（2026-09-14 新增；AiLabPresetService 默认读 /app/presets/ai-lab）
 COPY --chown=nodejs:nodejs backend/presets ./presets
 # 复制数据库迁移文件（旧的迁移方式，保留兼容）

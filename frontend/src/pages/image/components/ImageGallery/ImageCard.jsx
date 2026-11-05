@@ -91,6 +91,7 @@ const ImageCard = memo(({
   /* 下载进行中：按钮转圈并禁用，避免连点造成重复下载 */
   const [downloading, setDownloading] = useState(false);
 
+  const galleryPending = item.gallery_status === 'pending';
   const isMj = item.provider === 'midjourney';
   const isFailed = isTaskFailed(item);
   const isProcessing = isTaskProcessing(item, processingTasks);
@@ -265,7 +266,7 @@ const ImageCard = memo(({
                       <Tooltip
                         title={item.is_public
                           ? t('image.action.setPrivate')
-                          : t('image.action.setPublic')}
+                          : t(galleryPending ? 'image.galleryReview.withdraw' : 'image.galleryReview.submit')}
                       >
                         <Button
                           type="text"
@@ -310,6 +311,7 @@ const ImageCard = memo(({
         </div>
       }
     >
+      {isOwner && !isGallery && !hasImage && !isProcessing && !isFailed && item.moderation_status !== 'block' && <Button onClick={() => onTogglePublic(item)}>{t(galleryPending ? 'image.galleryReview.withdraw' : 'image.galleryReview.submit')}</Button>}
       <Card.Meta
         title={
           <div className="card-meta-title">
@@ -385,6 +387,7 @@ const ImageCard = memo(({
               {item.credits_consumed !== undefined && (
                 <span>{t('image.creditsConsumed', { credits: item.credits_consumed })}</span>
               )}
+              {isOwner && item.gallery_status && item.gallery_status !== 'private' && <Tag>{t(`image.galleryReview.${item.gallery_status}`)}</Tag>}
               {item.is_public && <Tag color="green">{t('status.public')}</Tag>}
               {item.is_favorite && isOwner && <Tag color="red">{t('status.favorited')}</Tag>}
               {isGallery && item.view_count !== undefined && (

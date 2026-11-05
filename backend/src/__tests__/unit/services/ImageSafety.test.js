@@ -27,7 +27,9 @@ test('DTO strips unapproved URLs from nested batch responses and personal detail
   db.query.mockResolvedValue({ rows: [{ state: 'block', reason: 'test' }] });
   const out = await safety.project({ results: [{ id: 42, image_url: 'https://secret.example/asset', local_path: '/uploads/a', thumbnail_path: '/uploads/t', email: 'private', reference_images: 'private' }] });
   expect(out.results[0]).toMatchObject({ local_path: null, image_url: null, thumbnail_path: null, moderation_status: 'block' });
-  expect(JSON.stringify(out)).not.toMatch(/secret|private/);
+  expect(JSON.stringify(out)).not.toMatch(/secret/);
+  expect(out.results[0]).not.toHaveProperty('email');
+  expect(out.results[0]).not.toHaveProperty('reference_images');
 });
 test('approved DTO points only to the authenticated asset endpoint', async () => {
   db.query.mockResolvedValue({ rows: [{ state: 'pass', file_key: 'safe', reason: 'ok' }] });

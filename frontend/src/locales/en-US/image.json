@@ -83,7 +83,7 @@
   "image.action.unfavorite": "Unfavorite",
   "image.action.public": "Make Public",
   "image.action.private": "Make Private",
-  "image.action.setPublic": "Share Publicly",
+  "image.action.setPublic": "Submit for teacher review",
   "image.action.setPrivate": "Set Private",
   "image.action.delete": "Delete",
   "image.action.download": "Download",
@@ -213,5 +213,16 @@
   "image.moderation.held": "This image is under review and cannot be viewed or shared.",
   "image.moderation.import": "Move to restricted storage",
   "image.moderation.pass": "Approved",
-  "image.moderation.imageUnavailable": "Image is no longer available"
+  "image.moderation.imageUnavailable": "Image is no longer available",
+  "image.galleryReview.title": "Gallery · teacher review",
+  "image.galleryReview.policy": "Every public image requires individual teacher approval. Reject sexual content, feces or coprophagia, insults and targeted humiliation. Machine approval never replaces teacher review. Review only your group; no self-approval.",
+  "image.galleryReview.pending": "Awaiting teacher review",
+  "image.galleryReview.approved": "Teacher approved",
+  "image.galleryReview.rejected": "Teacher rejected",
+  "image.galleryReview.private": "Private",
+  "image.galleryReview.submit": "Submit for teacher review",
+  "image.galleryReview.withdraw": "Withdraw request",
+  "image.galleryReview.confirm": "I have inspected the complete image and prompt against the gallery policy",
+  "image.galleryReview.approve": "Approve and publish",
+  "image.galleryReview.reject": "Reject and block"
 }

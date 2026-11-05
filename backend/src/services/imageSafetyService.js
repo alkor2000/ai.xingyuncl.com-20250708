@@ -60,9 +60,9 @@ async function capture(id, userId, buffer) {
       if (previous[0].sha256 !== artifact.sha) throw error('图片结果已锁定', 409);
       return;
     }
-    await query('INSERT INTO image_safety (generation_id,state,sha256,file_key,reason,revision) VALUES (?,?,?,?,?,1) ON DUPLICATE KEY UPDATE sha256=VALUES(sha256),file_key=VALUES(file_key),revision=revision+1',
+    await query('INSERT INTO image_safety (generation_id,state,sha256,file_key,reason,revision) VALUES (?,?,?,?,?,1) ON DUPLICATE KEY UPDATE state=IF(state="pending" AND file_key IS NULL,VALUES(state),state),sha256=VALUES(sha256),file_key=VALUES(file_key),revision=revision+1',
       [id, result.state, artifact.sha, artifact.key, result.reason]);
-    await query('UPDATE image_generations SET is_public=0 WHERE id=?', [id]);
+    await query('UPDATE image_generations SET is_public=0,gallery_approved_by=NULL WHERE id=?', [id]);
     await event(query, id, null, 'output', result.state, result.reason, artifact.sha);
   });
   const decision = await get(id);
@@ -76,6 +76,7 @@ async function project(value) {
   if (out.id && ('local_path' in out || 'thumbnail_path' in out || 'image_url' in out)) {
     const safety = await get(out.id);
     out.moderation_status = safety.state;
+    out.gallery_status = safety.gallery_state || 'private';
     out.moderation_reason = safety.reason;
     out.local_path = safety.state === 'pass' && safety.file_key ? `/api/image/generation/${out.id}/asset` : null;
     out.thumbnail_path = out.local_path ? `${out.local_path}?thumbnail=1` : null;
@@ -90,15 +91,21 @@ async function publish(id, userId) {
   return db.transaction(async query => {
     const { rows } = await query('SELECT id,is_public,status FROM image_generations WHERE id=? AND user_id=? FOR UPDATE', [id, userId]);
     if (!rows.length) throw error('记录不存在', 404);
-    const desired = rows[0].is_public ? 0 : 1;
-    if (desired) {
+    await query('INSERT IGNORE INTO image_safety (generation_id) VALUES (?)', [id]);
+    const { rows: decisions } = await query('SELECT * FROM image_safety WHERE generation_id=? FOR UPDATE', [id]);
+    const current = decisions[0];
+    const cancel = rows[0].is_public || current.gallery_state === 'pending';
+    if (!cancel) {
       const { rows: restriction } = await query('SELECT restricted FROM image_safety_restrictions WHERE user_id=? FOR UPDATE', [userId]);
-      const { rows: safety } = await query('SELECT * FROM image_safety WHERE generation_id=? FOR UPDATE', [id]);
-      if (restriction[0]?.restricted || rows[0].status !== 'success' || safety[0]?.state !== 'pass' || !safety[0]?.file_key) throw error('图片须审核通过后才能分享');
+      if (restriction[0]?.restricted || rows[0].status !== 'success' || current.state === 'block') throw error('图片未通过内容审核，不能提交公开申请');
     }
-    await query('UPDATE image_generations SET is_public=? WHERE id=?', [desired, id]);
-    await event(query, id, userId, desired ? 'publish' : 'unpublish', desired ? 'pass' : 'private', 'owner_request');
-    return { is_public: desired };
+    const galleryState = cancel ? 'private' : 'pending';
+    await query(`UPDATE image_safety SET gallery_state=?,gallery_reviewer_id=NULL,gallery_reviewed_at=NULL,
+      gallery_requested_at=?,revision=revision+1,updated_at=NOW() WHERE generation_id=?`, [galleryState, cancel ? null : new Date(), id]);
+    // A student request can never write is_public=1, including legacy clients.
+    await query('UPDATE image_generations SET is_public=0,gallery_approved_by=NULL WHERE id=?', [id]);
+    await event(query, id, userId, cancel ? 'gallery_withdraw' : 'gallery_submit', galleryState, 'owner_request');
+    return { is_public: 0, gallery_status: galleryState };
   });
 }
 async function decide(id, actor, state, reason, revision) {
@@ -110,16 +117,20 @@ async function decide(id, actor, state, reason, revision) {
     const { rows: current } = await query('SELECT * FROM image_safety WHERE generation_id=? FOR UPDATE', [id]);
     if (current[0].revision !== revision) throw error('内容已变更，请刷新后重新审核', 409);
     if (state === 'pass' && !current[0].file_key) throw error('请先将历史图片转入受限存储', 409);
-    await query('UPDATE image_safety SET state=?,reason=?,revision=revision+1,updated_at=NOW() WHERE generation_id=?', [state, 'manual_review', id]);
-    await query('UPDATE image_generations SET is_public=0 WHERE id=?', [id]);
+    await query("UPDATE image_safety SET state=?,reason=?,gallery_state=IF(gallery_state='approved','pending',gallery_state),gallery_reviewer_id=NULL,gallery_reviewed_at=NULL,revision=revision+1,updated_at=NOW() WHERE generation_id=?", [state, 'manual_review', id]);
+    await query('UPDATE image_generations SET is_public=0,gallery_approved_by=NULL WHERE id=?', [id]);
     await event(query, id, actor, 'decision', state, reason.trim(), current[0].sha256);
   });
 }
 async function asset(id, user, thumbnail = false, review = false) {
   const { rows } = await db.query('SELECT ig.user_id,ig.is_public,s.* FROM image_generations ig JOIN image_safety s ON s.generation_id=ig.id WHERE ig.id=?', [id]);
   const row = rows[0];
-  const admin = review && user.role === 'super_admin';
-  if (!row || (!admin && (row.state !== 'pass' || (!row.is_public && Number(row.user_id) !== Number(user.id))))) throw error('图片不可访问', 404);
+  let admin = review === true && user.role === 'super_admin';
+  if (review === 'teacher') {
+    await require('./galleryReviewService').authorize(id, user);
+    admin = true;
+  }
+  if (!row || (!admin && (row.state !== 'pass' || (Number(row.user_id) !== Number(user.id) && (!row.is_public || row.gallery_state !== 'approved' || !row.gallery_reviewer_id || Number(row.gallery_reviewer_id) === Number(row.user_id)))))) throw error('图片不可访问', 404);
   const bytes = await fs.readFile(assetPath(row.file_key));
   if (hash(bytes) !== row.sha256) throw error('图片校验失败', 409);
   if (admin) await event(db.query.bind(db), id, user.id, 'review_view', row.state, 'restricted_preview', row.sha256);

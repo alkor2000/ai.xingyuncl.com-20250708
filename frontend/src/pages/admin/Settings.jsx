@@ -1,3 +1,4 @@
+import GalleryReviewSettings from '../../components/admin/settings/GalleryReviewSettings';
 import ImageModerationSettings from '../../components/admin/settings/ImageModerationSettings';
 /**
  * 系统设置主页面 - 支持组管理员权限控制和系统配置持久化
@@ -342,6 +343,7 @@ const Settings = () => {
 
   /* Tab配置项 — v2.0 移除系统提示词Tab */
   const tabItems = [
+    { key: 'galleryReview', label: t('image.galleryReview.title'), children: <GalleryReviewSettings /> },
     {
       key: 'statistics',
       label: <span><BarChartOutlined />{t('admin.settings.tabs.statistics')}</span>,

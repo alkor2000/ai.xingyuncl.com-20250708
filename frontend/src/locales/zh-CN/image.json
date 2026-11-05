@@ -83,7 +83,7 @@
   "image.action.unfavorite": "取消收藏",
   "image.action.public": "公开",
   "image.action.private": "取消公开",
-  "image.action.setPublic": "公开分享",
+  "image.action.setPublic": "提交老师审核",
   "image.action.setPrivate": "设为私密",
   "image.action.delete": "删除",
   "image.action.download": "下载",
@@ -213,5 +213,16 @@
   "image.moderation.held": "图片正在审核，暂不可查看或分享",
   "image.moderation.import": "转入受限存储",
   "image.moderation.pass": "审核通过",
-  "image.moderation.imageUnavailable": "图片已不可访问"
+  "image.moderation.imageUnavailable": "图片已不可访问",
+  "image.galleryReview.title": "画廊 · 老师审核",
+  "image.galleryReview.policy": "作品必须由老师逐张审核后才能公开。禁止色情裸露、粪便与食粪等恶心内容、辱骂和针对他人的羞辱。机器通过不能代替老师审核；只能审核本组学生，不能自审。",
+  "image.galleryReview.pending": "待老师审核",
+  "image.galleryReview.approved": "老师已通过",
+  "image.galleryReview.rejected": "老师已驳回",
+  "image.galleryReview.private": "未申请公开",
+  "image.galleryReview.submit": "提交老师审核",
+  "image.galleryReview.withdraw": "撤回公开申请",
+  "image.galleryReview.confirm": "我已检查完整图片和提示词，确认符合公开画廊要求",
+  "image.galleryReview.approve": "审核通过并公开",
+  "image.galleryReview.reject": "驳回并屏蔽"
 }
