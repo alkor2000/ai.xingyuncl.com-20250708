@@ -17,6 +17,8 @@ jest.mock('../../../models/User', () => ({ findById: jest.fn() }));
 jest.mock('../../../services/ossService', () => ({ initialize: jest.fn(), uploadFile: jest.fn() }));
 jest.mock('../../../services/klingVideoService', () => ({ submitText2Video: jest.fn(async () => ({ taskId: 'kling-1', status: 'submitted' })), submitImage2Video: jest.fn(), queryTaskStatus: jest.fn() }));
 jest.mock('../../../services/sora2VideoService', () => ({ submitText2Video: jest.fn(async () => ({ taskId: 'sora-1', status: 'submitted' })), submitImage2Video: jest.fn(), queryTaskStatus: jest.fn(), convertRatioToOrientation: jest.fn(() => 'landscape') }));
+jest.mock('../../../services/imageSafetyService', () => ({ checkPrompt: jest.fn(async () => {}) }));
+jest.mock('../../../services/videoSafetyService', () => ({ framesForProvider: jest.fn(async (_, params) => params) }));
 jest.mock('axios', () => ({ post: jest.fn(), get: jest.fn() }));
 
 const axios = require('axios');

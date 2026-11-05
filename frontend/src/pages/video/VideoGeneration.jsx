@@ -33,6 +33,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import useVideoStore from '../../stores/videoStore';
 import useAuthStore from '../../stores/authStore';
+import ProtectedVideo, { downloadProtectedVideo } from '../../components/common/ProtectedVideo';
+import ProtectedImage from '../../components/common/ProtectedImage';
 import apiClient from '../../utils/api';
 import { mergeTurnItems } from './utils/mergeTurnItems';
 import './VideoGeneration.less';
@@ -109,7 +111,7 @@ const VideoGeneration = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [previewVideo, setPreviewVideo] = useState(null);
-  
+
   const [searchInput, setSearchInput] = useState(keyword || '');
   const isComposingRef = useRef(false);
 
@@ -155,12 +157,12 @@ const VideoGeneration = () => {
   const loadList = useCallback((tab, page, size, overrideKeyword) => {
     const k = overrideKeyword !== undefined ? overrideKeyword : keyword;
     const trimmed = (k || '').trim();
-    
+
     const params = { page, limit: size };
     if (trimmed) {
       params.keyword = trimmed;
     }
-    
+
     if (tab === 'public') {
       getPublicGallery(params);
     } else {
@@ -186,13 +188,13 @@ const VideoGeneration = () => {
       setResolution(selectedModel.default_resolution || '720p');
       setDuration(selectedModel.default_duration || 5);
       setRatio(selectedModel.default_ratio || '16:9');
-      
+
       /* v1.3 兜底: 如果当前 mode 是已隐藏的 last_frame，或模型不支持，强制回退到 text_to_video */
       if (generationMode === 'last_frame') {
         setGenerationMode('text_to_video');
       } else if (generationMode === 'first_frame' && !selectedModel.supports_first_frame) {
         setGenerationMode('text_to_video');
-      } else if (generationMode === 'first_last_frame' && 
+      } else if (generationMode === 'first_last_frame' &&
                  (!selectedModel.supports_first_frame || !selectedModel.supports_last_frame)) {
         setGenerationMode('text_to_video');
       }
@@ -303,8 +305,8 @@ const VideoGeneration = () => {
 
     const price = calculatePrice();
     if (user.credits_stats && user.credits_stats.remaining < price) {
-      message.error(t('video.insufficientCredits', { 
-        required: price, current: user.credits_stats.remaining 
+      message.error(t('video.insufficientCredits', {
+        required: price, current: user.credits_stats.remaining
       }));
       return;
     }
@@ -317,7 +319,7 @@ const VideoGeneration = () => {
       seed: seed === -1 ? undefined : seed,
       watermark, camera_fixed: cameraFixed
     };
-    
+
     if (generationMode === 'first_frame' || generationMode === 'first_last_frame') {
       params.first_frame_image = firstFrameImage;
     }
@@ -400,7 +402,7 @@ const VideoGeneration = () => {
 
   const handleSearch = useCallback((value) => {
     if (isComposingRef.current) return;
-    
+
     const newKeyword = (value || '').trim();
     setKeyword(newKeyword);
     setSearchInput(newKeyword);
@@ -445,7 +447,7 @@ const VideoGeneration = () => {
     const videoKey = `video-${item.id}-${item.local_path || 'no-path'}-${item.status}`;
     const isVertical = isVerticalVideo(item.ratio);
     const videoObjectFit = getVideoObjectFit(item);
-    
+
     return (
       <Card
         key={item.id}
@@ -466,13 +468,13 @@ const VideoGeneration = () => {
               </div>
             ) : isSucceeded && item.local_path ? (
               <div className="video-player" key={videoKey}>
-                <video
+                <ProtectedVideo
                   key={videoKey}
                   src={item.local_path}
                   poster={item.thumbnail_path}
                   controls
                   preload="metadata"
-                  style={{ 
+                  style={{
                     width: '100%', height: '200px',
                     objectFit: videoObjectFit, backgroundColor: '#000'
                   }}
@@ -493,10 +495,10 @@ const VideoGeneration = () => {
               </div>
             ) : (
               <div className="no-video">
-                <VideoCameraOutlined style={{ fontSize: 48, color: '#999' }} />
+                <VideoCameraOutlined style={{ fontSize: 48, color: '#999' }} /><p>{t('video.safety.held')}</p>
               </div>
             )}
-            
+
             {isOwner && (
               <div className="video-actions">
                 <Space direction="vertical" size="small">
@@ -507,10 +509,7 @@ const VideoGeneration = () => {
                         icon={<DownloadOutlined />}
                         onClick={(e) => {
                           e.stopPropagation();
-                          const link = document.createElement('a');
-                          link.href = item.local_path;
-                          link.download = `video_${item.id}.mp4`;
-                          link.click();
+                          downloadProtectedVideo(item.local_path, `video_${item.id}.mp4`).catch(() => message.error(t('video.safety.unavailable')));
                         }}
                       />
                     </Tooltip>
@@ -526,7 +525,7 @@ const VideoGeneration = () => {
                     </Tooltip>
                   )}
                   {isSucceeded && (
-                    <Tooltip title={item.is_public ? t('video.setPrivate') : t('video.setPublic')} placement="left">
+                    <Tooltip title={item.is_public ? t('video.setPrivate') : t(item.gallery_status === 'pending' ? 'video.galleryReview.withdraw' : 'video.galleryReview.submit')} placement="left">
                       <Button
                         type="primary" shape="circle" size="small"
                         icon={item.is_public ? <GlobalOutlined /> : <LockOutlined />}
@@ -578,6 +577,7 @@ const VideoGeneration = () => {
               {isFailed && <Tag color="error">{t('video.status.failed')}</Tag>}
               {isProcessing && <Tag color="processing">{t('video.processingText')}</Tag>}
               {isSucceeded && <Tag color="success">{t('video.completed')}</Tag>}
+              {item.gallery_status && item.gallery_status !== 'private' && <Tag>{t(`video.galleryReview.${item.gallery_status}`)}</Tag>}
             </div>
           }
           description={
@@ -627,7 +627,7 @@ const VideoGeneration = () => {
       </div>
     </div>
   );
-  
+
   const lastFrameUploadButton = (
     <div>
       {uploadingLast ? <Spin /> : <PlusOutlined />}
@@ -666,7 +666,7 @@ const VideoGeneration = () => {
                 <Space><PictureOutlined /><span>{t('video.modeFirstFrame')}</span></Space>
               </Option>
               {/* v1.3 隐藏单独 last_frame 选项（火山 API: last frame image content cannot be mixed with first frame or reference image content） */}
-              <Option value="first_last_frame" 
+              <Option value="first_last_frame"
                 disabled={!selectedModel?.supports_first_frame || !selectedModel?.supports_last_frame}>
                 <Space><FileImageOutlined /><span>{t('video.modeFirstLastFrame')}</span></Space>
               </Option>
@@ -695,7 +695,7 @@ const VideoGeneration = () => {
                 >
                   {firstFrameImage ? (
                     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                      <img src={firstFrameImage} alt={t('video.firstFrame')} 
+                      <ProtectedImage native src={firstFrameImage} alt={t('video.firstFrame')}
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
                       <Button type="text" danger icon={<DeleteOutlined />}
                         onClick={(e) => { e.stopPropagation(); handleRemoveFirstImage(); }}
@@ -705,7 +705,7 @@ const VideoGeneration = () => {
                 </Upload>
               </div>
             )}
-            
+
             {/* v1.3 尾帧上传仅在 first_last_frame 模式下显示（不再有单独 last_frame 模式） */}
             {generationMode === 'first_last_frame' && (
               <div style={{ marginTop: 16 }}>
@@ -721,7 +721,7 @@ const VideoGeneration = () => {
                 >
                   {lastFrameImage ? (
                     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-                      <img src={lastFrameImage} alt={t('video.lastFrame')}
+                      <ProtectedImage native src={lastFrameImage} alt={t('video.lastFrame')}
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
                       <Button type="text" danger icon={<DeleteOutlined />}
                         onClick={(e) => { e.stopPropagation(); handleRemoveLastImage(); }}
@@ -731,7 +731,7 @@ const VideoGeneration = () => {
                 </Upload>
               </div>
             )}
-            
+
             {(generationMode !== 'text_to_video') && (
               <div style={{ fontSize: 12, color: '#999', marginTop: 8 }}>
                 {t('video.imageFormatTip')}
@@ -833,7 +833,7 @@ const VideoGeneration = () => {
             justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}
         >
           {previewVideo && (
-            <video src={previewVideo.local_path} controls autoPlay
+            <ProtectedVideo src={previewVideo.local_path} controls autoPlay
               style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain' }} />
           )}
         </Modal>
@@ -875,7 +875,7 @@ const VideoGeneration = () => {
                   {selectedModel.supports_text_to_video && <Tag color="green">{t('video.textToVideo')}</Tag>}
                   {selectedModel.supports_first_frame && <Tag color="blue">{t('video.firstFrameToVideo')}</Tag>}
                   {/* v1.3 隐藏单独尾帧标签（火山不支持单独 last_frame） */}
-                  {selectedModel.supports_first_frame && selectedModel.supports_last_frame && 
+                  {selectedModel.supports_first_frame && selectedModel.supports_last_frame &&
                     <Tag color="purple">{t('video.firstLastFrameToVideo')}</Tag>}
                 </Space>
               </div>
@@ -893,7 +893,7 @@ const VideoGeneration = () => {
               maxLength={selectedModel?.max_prompt_length || 500}
               showCount
             />
-            
+
             {frameUploaders}
           </Card>
 
@@ -907,8 +907,8 @@ const VideoGeneration = () => {
               disabled={!selectedModel || !prompt.trim() || !selectedModel.has_api_key}
               block
             >
-              {generating 
-                ? t('video.generating') 
+              {generating
+                ? t('video.generating')
                 : `${t('video.generate')} (${t('video.credits', { credits: calculatePrice() })})`}
             </Button>
           </div>
@@ -978,17 +978,17 @@ const VideoGeneration = () => {
         width="90%"
         style={{ maxWidth: '1200px' }}
         centered
-        bodyStyle={{ 
+        bodyStyle={{
           padding: 0, background: '#000',
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           minHeight: '60vh'
         }}
       >
         {previewVideo && (
-          <video
+          <ProtectedVideo
             src={previewVideo.local_path}
             controls autoPlay
-            style={{ 
+            style={{
               width: '100%', maxHeight: '80vh',
               objectFit: isVerticalVideo(previewVideo.ratio) ? 'contain' : 'contain'
             }}

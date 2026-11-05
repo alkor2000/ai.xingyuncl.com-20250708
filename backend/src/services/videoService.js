@@ -25,6 +25,8 @@ const User = require('../models/User');
 const ossService = require('./ossService');
 const klingVideoService = require('./klingVideoService');
 const sora2VideoService = require('./sora2VideoService');
+const videoSafety = require('./videoSafetyService');
+const imageSafety = require('./imageSafetyService');
 const logger = require('../utils/logger');
 
 /**
@@ -79,6 +81,7 @@ class VideoService {
     let generationId = null;
 
     try {
+      await imageSafety.checkPrompt(userId, params.prompt, params.negative_prompt || '');
       // 1. 获取模型配置
       const model = await VideoModel.findById(modelId);
       if (!model || !model.is_active) {
@@ -143,6 +146,7 @@ class VideoService {
         }
       }
 
+      const providerParams = await videoSafety.framesForProvider(userId, params);
       // 6. 创建生成记录
       generationId = await VideoGeneration.create(generationData);
 
@@ -156,9 +160,9 @@ class VideoService {
         });
 
         if (params.generation_mode === 'first_frame' || params.generation_mode === 'image_to_video') {
-          taskResult = await klingVideoService.submitImage2Video(model, params);
+          taskResult = await klingVideoService.submitImage2Video(model, providerParams);
         } else {
-          taskResult = await klingVideoService.submitText2Video(model, params);
+          taskResult = await klingVideoService.submitText2Video(model, providerParams);
         }
       } else if (model.provider === 'sora2_goapi') {
         logger.info('使用Sora2 API生成视频', {
@@ -169,9 +173,9 @@ class VideoService {
         if (params.generation_mode === 'first_frame' ||
             params.generation_mode === 'image_to_video' ||
             params.first_frame_image) {
-          taskResult = await sora2VideoService.submitImage2Video(model, params);
+          taskResult = await sora2VideoService.submitImage2Video(model, providerParams);
         } else {
-          taskResult = await sora2VideoService.submitText2Video(model, params);
+          taskResult = await sora2VideoService.submitText2Video(model, providerParams);
         }
 
         if (taskResult.rawResponse && taskResult.rawResponse.detail) {
@@ -191,7 +195,7 @@ class VideoService {
           has_last_frame: !!params.last_frame_image
         });
 
-        taskResult = await this.submitToVolcano(model, params);
+        taskResult = await this.submitToVolcano(model, providerParams);
       }
 
       // 8. 更新生成记录
@@ -495,28 +499,15 @@ class VideoService {
             throw new Error('API返回成功但没有视频URL');
           }
 
-          let saveResult;
-          if (model.provider === 'kling') {
-            saveResult = await klingVideoService.downloadAndSaveVideo(
-              videoUrl, userId, generationId
-            );
-          } else if (model.provider === 'sora2_goapi') {
-            saveResult = await sora2VideoService.downloadAndSaveVideo(
-              videoUrl, taskData.thumbnailUrl, taskData.gifUrl, userId, generationId
-            );
-          } else {
-            saveResult = await this.downloadAndSaveVideo(
-              videoUrl, generationId, userId
-            );
-          }
+          const saveResult = await videoSafety.fromUrl(videoUrl, generationId, userId);
 
           await VideoGeneration.update(generationId, {
             status: 'succeeded',
-            video_url: videoUrl,
+            video_url: null,
             local_path: saveResult.localPath,
             thumbnail_path: saveResult.thumbnailPath,
             preview_gif_path: saveResult.previewGifPath,
-            last_frame_path: taskData.last_frame_url || null,
+            last_frame_path: null,
             file_size: saveResult.fileSize,
             video_width: saveResult.width || taskData.width,
             video_height: saveResult.height || taskData.height,
@@ -577,68 +568,7 @@ class VideoService {
    * 下载并保存视频（火山）
    */
   static async downloadAndSaveVideo(videoUrl, generationId, userId) {
-    try {
-      if (!videoUrl) {
-        throw new Error('视频URL为空');
-      }
-
-      logger.info('开始下载视频', {
-        videoUrl: videoUrl.substring(0, 100) + '...',
-        generationId, userId
-      });
-
-      const response = await axios.get(videoUrl, {
-        responseType: 'arraybuffer',
-        timeout: 120000,
-        maxContentLength: 500 * 1024 * 1024,
-        maxBodyLength: 500 * 1024 * 1024
-      });
-
-      const videoBuffer = Buffer.from(response.data);
-
-      await ossService.initialize();
-
-      const dateFolder = new Date().toISOString().slice(0, 7);
-      const timestamp = Date.now();
-      const random = crypto.randomBytes(8).toString('hex');
-      const fileName = `video_${generationId}_${timestamp}_${random}.mp4`;
-      const thumbFileName = `thumb_${generationId}_${timestamp}_${random}.jpg`;
-
-      const ossKey = `videos/${userId}/${dateFolder}/${fileName}`;
-      const thumbOssKey = `videos/${userId}/${dateFolder}/${thumbFileName}`;
-
-      const uploadResult = await ossService.uploadFile(videoBuffer, ossKey, {
-        headers: {
-          'Content-Type': 'video/mp4',
-          'Content-Disposition': `inline; filename="${fileName}"`
-        }
-      });
-
-      const thumbnailUrl = uploadResult.url;
-
-      logger.info('视频已保存', {
-        generationId, userId, ossKey,
-        isLocal: uploadResult.isLocal,
-        url: uploadResult.url
-      });
-
-      return {
-        localPath: uploadResult.url,
-        thumbnailPath: thumbnailUrl,
-        previewGifPath: null,
-        fileSize: videoBuffer.length,
-        width: 1920,
-        height: 1080,
-        duration: null
-      };
-
-    } catch (error) {
-      logger.error('下载保存视频失败', {
-        generationId, userId,
-        error: error.message
-      });
-      throw new Error('保存视频失败: ' + error.message);
-    }
+    return require('./videoSafetyService').fromUrl(videoUrl, generationId, userId);
   }
 
   /**

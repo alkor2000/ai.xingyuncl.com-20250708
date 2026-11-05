@@ -344,6 +344,7 @@ const Settings = () => {
   /* Tab配置项 — v2.0 移除系统提示词Tab */
   const tabItems = [
     { key: 'galleryReview', label: t('image.galleryReview.title'), children: <GalleryReviewSettings /> },
+    { key: 'videoGalleryReview', label: t('video.galleryReview.title'), children: <GalleryReviewSettings media="video" /> },
     {
       key: 'statistics',
       label: <span><BarChartOutlined />{t('admin.settings.tabs.statistics')}</span>,

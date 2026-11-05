@@ -15,6 +15,7 @@
  *   故白名单不含密钥不影响生成功能。
  */
 
+const videoSafety = require('../services/videoSafetyService');
 const VideoService = require('../services/videoService');
 const VideoModel = require('../models/VideoModel');
 const VideoGeneration = require('../models/VideoGeneration');
@@ -140,6 +141,7 @@ class VideoController {
   }
 
   static async getTaskStatus(req, res) {
+    const respond = async data => ResponseHelper.success(res, await videoSafety.project(data));
     try {
       const { task_id } = req.params;
       const userId = req.user.id;
@@ -161,7 +163,7 @@ class VideoController {
           hasLocalPath: !!generation.local_path
         });
 
-        return ResponseHelper.success(res, {
+        return await respond({
           id: generation.id,
           task_id: generation.task_id,
           status: generation.status,
@@ -192,7 +194,7 @@ class VideoController {
                 taskId: task_id
               });
 
-              return ResponseHelper.success(res, {
+              return await respond({
                 id: generation.id,
                 task_id: generation.task_id,
                 status: 'running',
@@ -208,7 +210,7 @@ class VideoController {
               });
             }
 
-            return ResponseHelper.success(res, {
+            return await respond({
               id: generation.id,
               task_id: generation.task_id,
               status: taskData.status || generation.status,
@@ -228,7 +230,7 @@ class VideoController {
         }
       }
 
-      return ResponseHelper.success(res, generation);
+      return await respond(generation);
     } catch (error) {
       logger.error('获取任务状态失败:', error);
       return ResponseHelper.error(res, '获取任务状态失败');
@@ -254,7 +256,7 @@ class VideoController {
         keyword: keyword || null
       });
 
-      return ResponseHelper.success(res, result);
+      return ResponseHelper.success(res, await videoSafety.project(result));
     } catch (error) {
       logger.error('获取生成历史失败:', error);
       return ResponseHelper.error(res, '获取历史记录失败');
@@ -272,7 +274,8 @@ class VideoController {
         return ResponseHelper.notFound(res, '记录不存在');
       }
 
-      if (generation.user_id !== userId && !generation.is_public) {
+      const decision = await videoSafety.get(id);
+      if (Number(generation.user_id) !== Number(userId) && (!generation.is_public || decision.state !== 'pass' || decision.gallery_state !== 'approved' || !decision.reviewer_id || Number(decision.reviewer_id) === Number(generation.user_id))) {
         return ResponseHelper.forbidden(res, '无权查看此记录');
       }
 
@@ -280,7 +283,7 @@ class VideoController {
         await VideoGeneration.incrementViewCount(id);
       }
 
-      return ResponseHelper.success(res, generation);
+      return ResponseHelper.success(res, await videoSafety.project(generation));
     } catch (error) {
       logger.error('获取生成记录失败:', error);
       return ResponseHelper.error(res, '获取记录失败');
@@ -387,7 +390,7 @@ class VideoController {
         keyword: keyword || null
       });
 
-      return ResponseHelper.success(res, result);
+      return ResponseHelper.success(res, await videoSafety.project(result));
     } catch (error) {
       logger.error('获取公开画廊失败:', error);
       return ResponseHelper.error(res, '获取画廊失败');
@@ -408,21 +411,10 @@ class VideoController {
         return ResponseHelper.forbidden(res, '无权操作此记录');
       }
 
-      const newPublicStatus = generation.is_public ? 0 : 1;
-      const success = await VideoGeneration.update(id, {
-        is_public: newPublicStatus
-      });
-
-      if (!success) {
-        return ResponseHelper.error(res, '操作失败');
-      }
-
-      return ResponseHelper.success(res, {
-        is_public: newPublicStatus === 1
-      }, '操作成功');
+      return ResponseHelper.success(res, await videoSafety.publish(id, userId));
     } catch (error) {
       logger.error('切换公开状态失败:', error);
-      return ResponseHelper.error(res, '操作失败');
+      return ResponseHelper.error(res, error.message || '操作失败', error.statusCode || 500);
     }
   }
 

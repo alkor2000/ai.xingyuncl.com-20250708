@@ -152,6 +152,9 @@ const useVideoStore = create((set, get) => ({
                 status: taskData.status,
                 progress: taskData.progress ?? null,
                 local_path: taskData.local_path ?? null,
+                moderation_status: taskData.moderation_status,
+                moderation_revision: taskData.moderation_revision,
+                gallery_status: taskData.gallery_status,
                 thumbnail_path: taskData.thumbnail_path ?? null,
                 error_message: taskData.error_message ?? null,
                 at: Date.now()
@@ -166,9 +169,12 @@ const useVideoStore = create((set, get) => ({
                   ...item,
                   status: taskData.status,
                   progress: taskData.progress || item.progress,
-                  video_url: taskData.video_url || item.video_url,
-                  local_path: taskData.local_path || item.local_path,
-                  thumbnail_path: taskData.thumbnail_path || item.thumbnail_path,
+                  video_url: taskData.moderation_status ? null : taskData.video_url || item.video_url,
+                  moderation_status: taskData.moderation_status,
+                moderation_revision: taskData.moderation_revision,
+                  gallery_status: taskData.gallery_status,
+                  local_path: taskData.moderation_status ? taskData.local_path : taskData.local_path || item.local_path,
+                  thumbnail_path: taskData.moderation_status ? taskData.thumbnail_path : taskData.thumbnail_path || item.thumbnail_path,
                   error_message: taskData.error_message || item.error_message
                 };
               }
@@ -204,6 +210,9 @@ const useVideoStore = create((set, get) => ({
                   return {
                     ...item,
                     status: taskData.status,
+                    moderation_status: taskData.moderation_status,
+                moderation_revision: taskData.moderation_revision,
+                    gallery_status: taskData.gallery_status,
                     video_url: taskData.video_url,
                     local_path: taskData.local_path,
                     thumbnail_path: taskData.thumbnail_path,
@@ -261,6 +270,7 @@ const useVideoStore = create((set, get) => ({
         
         // 智能合并数据
         const mergedData = data.map(newItem => {
+          if (newItem.moderation_status) return newItem; // Server safety decisions override completed-task caches.
           if (completedTasks[newItem.task_id]) {
             const currentItem = currentHistory.find(item => item.task_id === newItem.task_id);
             if (currentItem && (currentItem.status === 'succeeded' || currentItem.status === 'failed')) {
@@ -417,10 +427,10 @@ const useVideoStore = create((set, get) => ({
       if (response.data.success) {
         set(state => ({
           generationHistory: state.generationHistory.map(item =>
-            item.id === id ? { ...item, is_public: !item.is_public } : item
+            item.id === id ? { ...item, ...response.data.data } : item
           )
         }));
-        message.success(response.data.data?.is_public ? i18n.t('video.setPublicResult') : i18n.t('video.setPrivateResult'));
+        message.success(i18n.t(response.data.data?.gallery_status === 'pending' ? 'video.galleryReview.pending' : 'video.setPrivateResult'));
         return true;
       }
     } catch (error) {

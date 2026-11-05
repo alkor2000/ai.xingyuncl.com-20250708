@@ -56,4 +56,4 @@ EXPOSE 4000
 # 使用tini作为PID 1进程
 ENTRYPOINT ["/sbin/tini", "--"]
 # 启动应用（先以root执行迁移，然后切换用户启动应用）
-CMD ["/bin/sh", "-c", "/usr/local/bin/run-migrations.sh && mkdir -p /app/storage/image-safety && chown nodejs:nodejs /app/storage/image-safety && chmod 700 /app/storage/image-safety && su-exec nodejs node src/server.js"]
+CMD ["/bin/sh", "-c", "/usr/local/bin/run-migrations.sh && mkdir -p /app/storage/image-safety /app/storage/video-safety && chown nodejs:nodejs /app/storage/image-safety /app/storage/video-safety && chmod 700 /app/storage/image-safety /app/storage/video-safety && su-exec nodejs node src/server.js"]

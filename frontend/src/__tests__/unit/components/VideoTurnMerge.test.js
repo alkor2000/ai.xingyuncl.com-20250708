@@ -81,3 +81,16 @@ describe('同一个 id 两个来源打架', () => {
     expect(mergeTurnItems(empty, staleHistory, doneSnapshot)).toBe(empty)
   })
 })
+
+// Safety revisions outrank cached generation completion: a takedown cannot be undone by an old poll.
+it('clears a cached playable URL after teacher rejection and ignores older approvals', () => {
+  const known = { id: 91, task_id: 'safety-task', status: 'succeeded', local_path: '/api/video/generation/91/asset', moderation_status: 'pass', gallery_status: 'approved', moderation_revision: 3 };
+  const pending = new Map([[91, known]]);
+  const rejected = { ...known, local_path: null, thumbnail_path: null, moderation_status: 'block', gallery_status: 'rejected', moderation_revision: 4 };
+  const next = mergeTurnItems(pending, [rejected], { a: { ...known, generationId: 91 } });
+  expect(next.get(91).local_path).toBeNull();
+  expect(next.get(91).moderation_status).toBe('block');
+  const stale = mergeTurnItems(next, [known], { a: { ...known, generationId: 91 } });
+  expect(stale.get(91).local_path).toBeNull();
+  expect(stale.get(91).moderation_revision).toBe(4);
+});

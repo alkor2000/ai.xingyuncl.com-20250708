@@ -14,7 +14,7 @@
  */
 
 /* 只有这五个字段决定"这一条现在长什么样"，比较与覆盖都只看它们 */
-const FIELDS = ['status', 'progress', 'local_path', 'thumbnail_path', 'error_message'];
+const FIELDS = ['status', 'progress', 'local_path', 'thumbnail_path', 'error_message', 'moderation_status', 'gallery_status', 'moderation_revision'];
 
 /* 谁能盖谁：终态最大，生成中次之，排队/未知最小 */
 const RANK = { pending: 0, submitted: 0, queued: 0, running: 1, processing: 1, succeeded: 2, failed: 2 };
@@ -79,8 +79,11 @@ export function mergeTurnItems(prev, history = [], snapshots = {}) {
   let next = null;
   for (const [id, { source }] of chosen) {
     const known = prev.get(id);
-    if (rank(known.status) > rank(source.status)) continue;      // 晚到的旧消息，丢掉
-    const merged = { ...known, ...patchOf(source), id };
+    const candidates = [known, source, ...history.filter(row => row && (row.id === id || (row.task_id && row.task_id === known.task_id)))].filter(row => row.moderation_status);
+    const latest = candidates.reduce((best, row) => !best || (row.moderation_revision ?? -1) >= (best.moderation_revision ?? -1) ? row : best, null);
+    if (rank(known.status) > rank(source.status) && !latest) continue;
+    const merged = { ...known, ...(rank(known.status) > rank(source.status) ? {} : patchOf(source)), id };
+    if (latest) for (const field of ['local_path','thumbnail_path','moderation_status','gallery_status','moderation_revision']) merged[field] = latest[field];
     if (same(known, merged)) continue;
     next = next || new Map(prev);
     next.set(id, merged);

@@ -1,4 +1,5 @@
 import React from 'react';
+import ProtectedVideo from '../../../../components/common/ProtectedVideo';
 import { Button, Empty, Progress, Space, Spin, Tag, Typography } from 'antd';
 import { ExpandOutlined, RedoOutlined } from '@ant-design/icons';
 
@@ -65,7 +66,7 @@ export default function ConversationArea({ t, turns, itemById, onRerun, onOpen }
                 }
                 return item.local_path ? (
                   <div className="studio-turn-video" key={item.id} data-testid="studio-turn-video">
-                    <video src={item.local_path} poster={item.thumbnail_path} controls preload="metadata" />
+                    <ProtectedVideo src={item.local_path} poster={item.thumbnail_path} controls preload="metadata" />
                     <Button size="small" type="text" icon={<ExpandOutlined />} className="studio-turn-expand"
                       data-testid="studio-turn-expand" onClick={() => onOpen(item)}>
                       {t('video.studio.fullscreen')}
@@ -73,7 +74,7 @@ export default function ConversationArea({ t, turns, itemById, onRerun, onOpen }
                   </div>
                 ) : (
                   <div className="studio-turn-pending" key={item.id}>
-                    <Tag>{t('video.studio.noVideoYet')}</Tag>
+                    <Tag>{t(item.moderation_status ? 'video.safety.held' : 'video.studio.noVideoYet')}</Tag>
                   </div>
                 );
               })}

@@ -20,14 +20,25 @@ const agent = new https.Agent({ lookup(hostname, options, callback) {
     else callback(null, addresses[0].address, 4);
   });
 } });
-async function download(value) {
+function checkedUrl(value) {
   const url = new URL(value);
   if (url.hostname.includes(':') || url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443') ||
       (net.isIP(url.hostname) && !publicAddress(url.hostname))) throw new Error('Image URL rejected');
+  return url;
+}
+async function openMediaStream(value, signal) {
+  const url = checkedUrl(value);
+  try {
+    return (await axios.get(url.href, { httpsAgent: agent, proxy: false, responseType: 'stream',
+      signal, timeout: 120000, maxRedirects: 0 })).data;
+  } catch { throw new Error('媒体下载失败'); }
+}
+async function download(value) {
+  const url = checkedUrl(value);
   try {
     const response = await axios.get(url.href, { httpsAgent: agent, proxy: false, responseType: 'arraybuffer',
       timeout: 30000, maxRedirects: 0, maxContentLength: 20 * 1024 * 1024 });
     return Buffer.from(response.data);
   } catch { throw new Error('图片下载失败，请稍后重试'); }
 }
-module.exports = { download, publicAddress };
+module.exports = { download, publicAddress, openMediaStream };

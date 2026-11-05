@@ -64,7 +64,7 @@ class VideoGeneration {
         'task_id', 'status', 'progress', 'error_message',
         'video_url', 'local_path', 'thumbnail_path', 'preview_gif_path', 'last_frame_path',
         'file_size', 'video_width', 'video_height', 'video_duration',
-        'generation_time', 'completed_at', 'is_public',
+        'generation_time', 'completed_at',
         'provider', 'orientation', 'reference_images', 'generation_id',
         'oss_video_url', 'oss_thumbnail_url', 'oss_gif_url',
         'raw_response', 'started_at', 'download_attempted', 'download_failed_reason'
@@ -220,7 +220,7 @@ class VideoGeneration {
       const limitInt = parseInt(limit);
       const offset = (pageInt - 1) * limitInt;
 
-      let whereConditions = ['vg.is_public = 1', 'vg.status = "succeeded"'];
+      let whereConditions = ['vg.is_public = 1', 'vg.status = "succeeded"', "EXISTS (SELECT 1 FROM video_safety s WHERE s.generation_id=vg.id AND s.state='pass' AND s.gallery_state='approved' AND s.file_key IS NOT NULL AND s.reviewer_id IS NOT NULL AND s.reviewer_id<>vg.user_id)"];
       const params = [];
 
       if (model_id) {

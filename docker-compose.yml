@@ -119,6 +119,7 @@ services:
     volumes:
       - ./storage/uploads:/app/storage/uploads
       - ./storage/image-safety:/app/storage/image-safety
+      - ./storage/video-safety:/app/storage/video-safety
       - ./logs/backend:/app/logs
     networks:
       - ai-network

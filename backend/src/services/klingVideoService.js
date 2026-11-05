@@ -269,68 +269,7 @@ class KlingVideoService {
    * @param {number} generationId 生成记录ID
    */
   async downloadAndSaveVideo(videoUrl, userId, generationId) {
-    try {
-      logger.info('开始下载可灵视频', {
-        url: videoUrl.substring(0, 100) + '...',
-        userId,
-        generationId
-      });
-
-      // 下载视频
-      const response = await axios.get(videoUrl, {
-        responseType: 'arraybuffer',
-        timeout: 120000, // 2分钟超时
-        maxContentLength: 500 * 1024 * 1024, // 最大500MB
-        maxBodyLength: 500 * 1024 * 1024
-      });
-
-      const videoBuffer = Buffer.from(response.data);
-      
-      // 初始化OSS服务
-      await ossService.initialize();
-      
-      // 生成文件名和路径
-      const dateFolder = new Date().toISOString().slice(0, 7); // YYYY-MM
-      const timestamp = Date.now();
-      const random = crypto.randomBytes(8).toString('hex');
-      const fileName = `kling_video_${generationId}_${timestamp}_${random}.mp4`;
-      
-      // 构建OSS key
-      const ossKey = `videos/${userId}/${dateFolder}/${fileName}`;
-      
-      // 上传到OSS
-      const uploadResult = await ossService.uploadFile(videoBuffer, ossKey, {
-        headers: {
-          'Content-Type': 'video/mp4',
-          'Content-Disposition': `inline; filename="${fileName}"`
-        }
-      });
-      
-      logger.info('可灵视频已保存到OSS', {
-        generationId,
-        userId,
-        ossKey,
-        url: uploadResult.url
-      });
-      
-      // 返回完整的结果对象，确保所有字段都有值（使用null而不是undefined）
-      return {
-        localPath: uploadResult.url,
-        thumbnailPath: uploadResult.url, // TODO: 生成缩略图
-        previewGifPath: null, // 明确设置为null而不是undefined
-        fileSize: videoBuffer.length,
-        width: 1920,  // TODO: 从视频元数据获取实际宽度
-        height: 1080, // TODO: 从视频元数据获取实际高度
-        duration: null // TODO: 从视频元数据获取实际时长
-      };
-    } catch (error) {
-      logger.error('下载保存可灵视频失败', {
-        generationId,
-        userId,
-        error: error.message
-      });
-      throw new Error('保存视频失败: ' + error.message);
-    }
+    return require('./videoSafetyService').fromUrl(videoUrl, generationId, userId);
   }
 
   /**
