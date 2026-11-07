@@ -279,6 +279,7 @@ case "$*" in
   *"git rev-parse HEAD"*) if [[ "$*" == *"fake-pm2"* ]]; then echo "$FAKE_LOCAL_SHA"; else echo "$FAKE_REMOTE_SHA"; fi;;
   *"sha256sum -c --status && mv"*) [ "${FAKE_PART_OK:-1}" = 1 ] && exit 0 || exit 1;;
   *"sha256sum -c --status"*) [ "${FAKE_REMOTE_PKG_PRESENT:-0}" = 1 ] && exit 0 || exit 1;;
+  *"test -e"*) [ "${FAKE_REMOTE_TAR_EXISTS:-0}" = 1 ] && exit 0 || exit 1;;
   *"mkdir -p"*) exit 0;;
   *"rm -f"*) exit 0;;
   *"git fetch"*) echo "    服务器现在位于: abc"; exit 0;;
@@ -297,6 +298,11 @@ case "$*" in
     if [[ "$*" == *" release "* ]]; then echo "lock released"; exit 0; fi
     if [[ "$*" == *" resources "* ]]; then if [ "${FAKE_RESOURCES:-ok}" = ok ]; then echo "resources ready: disk=1 bytes memory=1 bytes inodes=1"; exit 0; fi; echo "insufficient ${FAKE_RESOURCES} resources" >&2; exit 1; fi
     if [[ "$*" == *" sealed-parent"* ]]; then
+      calls=$(grep -c " sealed-parent" "$TRACE")
+      if [ "$calls" -ge 2 ] && [ -n "${FAKE_SEALED_UNDER_LOCK:-}" ]; then
+        if [ "$FAKE_SEALED_UNDER_LOCK" = unreadable ]; then echo "cannot read" >&2; exit 1; fi
+        echo "$FAKE_SEALED_UNDER_LOCK"; exit 0
+      fi
       if [ "${FAKE_SEALED:-ok}" = ok ]; then echo "parent=${FAKE_PARENT_SHA} backend=sha256:b frontend=sha256:f"; exit 0; fi
       echo "ai-platform-backend is not the sealed release" >&2; exit 1
     fi
@@ -410,11 +416,13 @@ esac
 
     def test_code_only_keeps_every_gate_in_order_and_tells_the_remote_stage(self):
         self.assertNotEqual(self.code_only().returncode, 0, "fake remote main stage stops with 99")
-        order = [self.first(" sealed-parent"), self.first(" acquire "), self.first(" resources "), self.first("images.tar.gz.part"),
+        parents = [i for i, line in enumerate(self.lines) if " sealed-parent" in line]
+        self.assertEqual(len(parents), 2, "read before the prompt and again under the lock")
+        order = [parents[0], self.first(" acquire "), parents[1], self.first(" resources "), self.first("images.tar.gz.part"),
                  self.first("sha256sum -c --status && mv"), self.first("bash -s /var/www/ai-platform")]
         self.assertTrue(all(i is not None for i in order), (order, self.lines))
-        self.assertEqual(order, sorted(order), "parent binding → lock → gate → package → verify → remote stage")
-        self.assertIn(" resources 3 1024 100000 prebuilt", self.lines[order[2]], "--code-only does not relax the gate")
+        self.assertEqual(order, sorted(order), "parent binding → lock → parent again → gate → package → verify → remote stage")
+        self.assertIn(" resources 3 1024 100000 prebuilt", self.lines[order[3]], "--code-only does not relax the gate")
         self.assertTrue(self.lines[order[-1]].endswith(" linux/amd64 1"), self.lines[order[-1]])
         self.assertIn("发布方式:    纯代码", self.out)
         self.assertIsNotNone(self.first(" release "), "the lock is given back")
@@ -429,6 +437,29 @@ esac
         self.assertNotEqual(self.code_only(FAKE_SEALED="no").returncode, 0)
         self.assertIn("封存的父版", self.out); self.assertIn("not the sealed release", self.out)
         self.assertIsNone(self.first(" acquire ")); self.assertIsNone(self.first("scp "))
+
+    def test_code_only_stops_when_the_parent_changes_between_review_and_the_lock(self):
+        reviewed = f"parent={self.old} backend=sha256:b frontend=sha256:f"
+        for label, under_lock in (("another commit", f"parent={self.new} backend=sha256:b frontend=sha256:f"),
+                                  ("another backend image", f"parent={self.old} backend=sha256:x frontend=sha256:f"),
+                                  ("another frontend image", f"parent={self.old} backend=sha256:b frontend=sha256:x"),
+                                  ("unreadable", "unreadable")):
+            with self.subTest(label):
+                self.assertNotEqual(self.code_only(FAKE_SEALED_UNDER_LOCK=under_lock).returncode, 0)
+                self.assertIn("封存父版变了或读不到", self.out); self.assertIn(reviewed, self.out)
+                self.assertIsNotNone(self.first(" acquire ")); self.assertIsNotNone(self.first(" release "), "the lock is given back")
+                for forbidden in (" resources ", "scp ", "git fetch", "mkdir -p", "bash -s /var/www/ai-platform"):
+                    self.assertIsNone(self.first(forbidden), forbidden)
+
+    def test_code_only_will_not_overwrite_an_unverified_package_in_the_task_directory(self):
+        self.assertNotEqual(self.code_only(FAKE_REMOTE_TAR_EXISTS=1).returncode, 0)
+        self.assertIn("不覆盖也不删除", self.out)
+        for forbidden in ("rm -f '/var/tmp/ai-platform-images", "images.tar.gz.part", "bash -s /var/www/ai-platform"):
+            self.assertIsNone(self.first(forbidden), forbidden)
+        self.assertIsNotNone(self.first(" release "))
+        self.deploy(FAKE_REMOTE_TAR_EXISTS=1)
+        self.assertIsNone(self.first("test -e"), "the normal path keeps its native behaviour")
+        self.assertIsNotNone(self.first("images.tar.gz.part"))
 
     def test_code_only_refuses_a_parent_this_checkout_cannot_place_before_head(self):
         self.assertNotEqual(self.code_only(parent="1" * 40).returncode, 0)
@@ -500,7 +531,7 @@ esac
         self.trace = base / "docker-trace"
         executable(self.bin / "docker", '''
 echo "docker $*" >> "$TRACE"
-if [[ "$1" == load ]]; then [ "${FAKE_LOAD_FAIL:-0}" = 1 ] && { echo "invalid tar header" >&2; exit 1; }; echo "Loaded image: x"; exit 0; fi
+if [[ "$1" == load ]]; then [ "${FAKE_LOAD_FAIL:-0}" = 1 ] && { echo "invalid tar header" >&2; exit 1; }; [ "${FAKE_MUTATE_TAR:-0}" = 1 ] && echo changed >> "$3"; echo "Loaded image: x"; exit 0; fi
 if [[ "$1" == image && "$2" == inspect ]]; then if [[ "$*" == *"json .Config.Cmd"* ]]; then echo "$FAKE_IMAGE_CMD"; else echo sha256:old; fi; exit 0; fi
 if [[ "$1" == logs ]]; then printf '%s\\n' "${FAKE_BACKEND_LOGS:-}"; exit 0; fi
 if [[ "$1" == inspect ]]; then
@@ -644,6 +675,28 @@ exit 0
     def test_normal_path_never_inspects_the_image_cmd(self):
         self.assertEqual(self.run_remote(FAKE_IMAGE_CMD='["node","src/server.js"]').returncode, 0, self.output)
         self.assertIsNone(self.first("json .Config.Cmd"))
+
+    def test_code_only_removes_only_the_two_files_it_verified(self):
+        (self.pkg / "someone-elses-file.txt").write_text("not from this run")
+        result = self.run_remote(code_only=True)
+        self.assertEqual(result.returncode, 0, self.output)
+        self.assertFalse((self.pkg / "images.tar.gz").exists()); self.assertFalse((self.pkg / "MANIFEST.env").exists())
+        self.assertEqual((self.pkg / "someone-elses-file.txt").read_text(), "not from this run")
+        self.assertIn("还有别的文件，保留", self.output)
+        text = (self.backups / "releases" / f"ai-platform-{self.task}" / "RELEASE.txt").read_text()
+        self.assertIn("STAGED_PACKAGE=removed-own-files", text)
+
+    def test_code_only_keeps_everything_when_the_package_no_longer_matches(self):
+        result = self.run_remote(code_only=True, FAKE_MUTATE_TAR=1)
+        self.assertEqual(result.returncode, 0, self.output)
+        self.assertIn("REMOTE_DONE", result.stdout, "the release itself is done; only the cleanup is withheld")
+        self.assertTrue((self.pkg / "images.tar.gz").exists()); self.assertTrue((self.pkg / "MANIFEST.env").exists())
+        self.assertIn("STAGED_PACKAGE=retained-not-verified", (self.backups / "releases" / f"ai-platform-{self.task}" / "RELEASE.txt").read_text())
+
+    def test_normal_path_still_removes_the_whole_package_directory(self):
+        (self.pkg / "extra.txt").write_text("x")
+        self.assertEqual(self.run_remote().returncode, 0, self.output)
+        self.assertFalse(self.pkg.exists())
 
     def test_code_only_is_not_released_if_the_startup_script_ran_or_the_command_is_not_replaced(self):
         for knobs in ({"FAKE_BACKEND_LOGS": "检查数据库迁移..."}, {"FAKE_BACKEND_LOGS": "检查数据库迁移...\n" + "x" * 120000}, {"FAKE_CMD": '["/bin/sh","-c","/usr/local/bin/run-migrations.sh && su-exec nodejs node src/server.js"]'}, {"FAKE_CMD": ""}):

@@ -166,10 +166,10 @@ make build-images
 make deploy-docker ARGS="--prebuilt=<包目录> --code-only"
 ```
 
-1. **范围门**：差量含 `backend/migrations/`、`backend/knexfile.js`、`database/`、`tools/database-upgrade/`、`docker/`、`docker-compose.yml` 中任一路径即拒绝，改走常规发布。Docker 站点的差量基准是 `docker-release-preflight.sh sealed-parent` 读到的运行中封存父版（`current` 发布记录、镜像清单、两个运行容器必须是同一份且健康），不是服务器 Git HEAD；读不到或对不上就拒绝，这一步在拿锁和传任何东西之前。`--code-only` 只能配 `--prebuilt`。目标镜像加载后还要核它的 CMD 就是已知那一份，不符就删掉刚加载的两个标签并中止，不备份、不切换。
-2. **不做的事**：不跑 `knex migrate:latest`；容器启动不跑 `run-migrations.sh`（`release.override.yml` 与 `rollback.override.yml` 给 backend 写 `command: ["su-exec", "nodejs", "node", "src/server.js"]`，只替换 CMD、镜像字节不变，切换后核 `Config.Cmd` 与日志，不符即按失败处理并打印回滚命令）；不清理旧镜像和旧库备份；星云备份门带 `BACKUP_RETENTION=skip`，只新增、不删旧备份。保留份数的配置不动，下一次常规发布照常收回。
-3. **照旧保留**：交互确认、站点先后、发布锁、资源门（不因 `--code-only` 放宽）、包与镜像核验、发布前库备份、回退标签与回退文件、健康检查、星云 `rebuild.sh`（其中清 PM2 日志照旧）。北大只删本次自己上传的暂存包。星云的每日定时备份不走发布脚本，仍按 `KEEP` 滚动。
-4. **记录**：`RELEASE.txt` 多出 `RELEASE_KIND=code-only`、`DB_MIGRATED=skipped-code-only`、`STARTUP_MIGRATIONS=skipped-code-only`、`RETENTION_CLEANUP=skipped-code-only`。
+1. **范围门**：差量含 `backend/migrations/`、`backend/knexfile.js`、`database/`、`tools/database-upgrade/`、`docker/`、`docker-compose.yml` 中任一路径即拒绝，改走常规发布。Docker 站点的差量基准是 `docker-release-preflight.sh sealed-parent` 读到的运行中封存父版（`current` 发布记录、镜像清单、两个运行容器必须是同一份且健康），不是服务器 Git HEAD；读不到或对不上就拒绝，这一步在拿锁和传任何东西之前；拿到锁后、传码传包之前再读一次，完整提交和两个镜像 ID 变了就停。`--code-only` 只能配 `--prebuilt`。目标镜像加载后还要核它的 CMD 就是已知那一份，不符就删掉刚加载的两个标签并中止，不备份、不切换。
+2. **不做的事**：不跑 `knex migrate:latest`；容器启动不跑 `run-migrations.sh`（`release.override.yml` 与 `rollback.override.yml` 给 backend 写 `command: ["su-exec", "nodejs", "node", "src/server.js"]`，只替换 CMD、镜像字节不变，切换后核 `Config.Cmd` 与日志，不符即按失败处理并打印回滚命令）；不清理旧镜像和旧库备份；星云备份门带 `BACKUP_RETENTION=skip`，只新增、不删旧备份；星云 `rebuild.sh` 带 `REBUILD_KEEP_LOGS=1`，不清 PM2 与 auth/frontend 的历史日志。保留份数的配置不动，下一次常规发布照常收回。
+3. **照旧保留**：交互确认、站点先后、发布锁、资源门（不因 `--code-only` 放宽）、包与镜像核验、发布前库备份、回退标签与回退文件、健康检查、星云 `rebuild.sh` 的构建与重启。北大只删本次核过摘要的 `images.tar.gz` 与和发布目录副本相同的 `MANIFEST.env`（本机留有同摘要的包），目录空了才去掉，核不上就全部保留；任务目录里已有摘要不符的包时拒绝发布，不覆盖。星云的每日定时备份不走发布脚本，仍按 `KEEP` 滚动。
+4. **记录**：`RELEASE.txt` 多出 `RELEASE_KIND=code-only`、`DB_MIGRATED=skipped-code-only`、`STARTUP_MIGRATIONS=skipped-code-only`、`RETENTION_CLEANUP=skipped-code-only`、`STAGED_PACKAGE=removed-own-files` 或 `retained-not-verified`。
 5. **代价**：不清理意味着这次发布净增磁盘（一份库备份和新镜像层），发布前先看 `make status-docker` 的磁盘行。
 
 其他命令：`make status-docker`（git/容器/健康/磁盘/最近发布）、`make migrate-status-docker`、`make migrate-docker`（单独跑迁移，先备份）、`make logs-docker`、`make rollback-docker`。

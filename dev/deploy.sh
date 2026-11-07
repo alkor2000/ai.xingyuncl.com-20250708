@@ -71,7 +71,7 @@ if git --no-pager diff --name-only "$REMOTE_SHA..$LOCAL_SHA" 2>/dev/null | grep 
   echo "  ⚠ 本次含 knex 迁移文件：rebuild.sh 不跑迁移，发布后按 dev/RELEASE.md 第三节执行 make migrate-status / make migrate"
 fi
 if [ "$CODE_ONLY" = 1 ]; then
-  echo "  发布方式:    纯代码（--code-only）：差量不含迁移与启动文件；备份门只新增备份、不删旧备份"
+  echo "  发布方式:    纯代码（--code-only）：差量不含迁移与启动文件；备份门只新增备份、不删旧备份；重启不清历史日志"
 fi
 echo "=========================================="
 if [ "$ASSUME_YES" != 1 ]; then
@@ -134,6 +134,11 @@ if git diff --name-only $REMOTE_SHA HEAD | grep -qE '^backend/(package(-lock)?\.
 fi
 if git diff --name-only $REMOTE_SHA HEAD | grep -qE '^frontend/(package(-lock)?\.json)$'; then
   echo "==> frontend 依赖有变化，npm ci ..."; ( cd frontend && npm ci --no-audit --no-fund )
+fi
+# 纯代码发布不删历史日志：rebuild.sh 刚随本次提交合入，核一下它认这个开关，不认就不重启。
+if [ "$CODE_ONLY" = 1 ]; then
+  grep -q REBUILD_KEEP_LOGS rebuild.sh || { echo "❌ 服务器上的 rebuild.sh 不支持保留日志，中止；服务没有重启。"; exit 1; }
+  export REBUILD_KEEP_LOGS=1
 fi
 bash rebuild.sh --full
 EOF

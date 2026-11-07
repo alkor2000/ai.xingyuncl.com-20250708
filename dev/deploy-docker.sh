@@ -142,12 +142,13 @@ if ! git cat-file -e "$REMOTE_SHA" 2>/dev/null || ! git merge-base --is-ancestor
 fi
 # 纯代码发布的前提，在拿锁和传任何东西之前核完。差量基准是"正在运行的封存父版"，不是服务器 Git HEAD：
 # Git HEAD 不代表运行中的镜像，传码后中断再重跑时它已经等于目标提交，拿它算差量永远是空的。
-PARENT_SHA=""
+PARENT_SHA=""; PARENT_IDENTITY=""
 if [ "$CODE_ONLY" = 1 ]; then
   if ! PARENT_LINE=$($SSH bash -s -- sealed-parent < "$PREFLIGHT" 2>&1); then
     echo "❌ --code-only 要求运行中的版本就是发布记录封存的父版，当前不成立，中止："; echo "$PARENT_LINE" | sed 's/^/    /'; exit 1
   fi
-  PARENT_SHA=$(sed -n 's/^parent=\([0-9a-f]\{40\}\) .*/\1/p' <<<"$PARENT_LINE")
+  PARENT_IDENTITY=$(grep -m1 '^parent=' <<<"$PARENT_LINE" || true)
+  PARENT_SHA=$(sed -n 's/^parent=\([0-9a-f]\{40\}\) .*/\1/p' <<<"$PARENT_IDENTITY")
   if [ -z "$PARENT_SHA" ] || ! git cat-file -e "$PARENT_SHA" 2>/dev/null || ! git merge-base --is-ancestor "$PARENT_SHA" "$LOCAL_SHA"; then
     echo "❌ 封存父版（${PARENT_LINE}）读不出来或不是本地 HEAD 的祖先，中止。"; exit 1
   fi
@@ -212,6 +213,16 @@ if ! $SSH bash -s -- acquire "$LOCK_DIR" "$LOCK_TOKEN" < "$LOCKSH"; then
 fi
 LOCK_HELD=1
 
+# 差量是按确认前读到的父版审的；等确认和排队拿锁期间它可能变了。拿到锁后、任何传码传包之前再读一次，
+# 完整提交和两个镜像身份都要一字不差，否则这次核过的范围不再成立。
+if [ "$CODE_ONLY" = 1 ]; then
+  LOCKED_IDENTITY=$($SSH bash -s -- sealed-parent < "$PREFLIGHT" 2>/dev/null | grep -m1 '^parent=' || true)
+  if [ "$LOCKED_IDENTITY" != "$PARENT_IDENTITY" ]; then
+    echo "❌ 拿到发布锁后封存父版变了或读不到，中止；没有传码、没有传包。请重新核父版后再发。"
+    echo "    确认时: $PARENT_IDENTITY"; echo "    现在:   ${LOCKED_IDENTITY:-<读不到>}"; exit 1
+  fi
+fi
+
 # 代码传输和任何服务器写入前，先以本地候选检查远端可用资源。
 $SSH bash -s -- resources "$GATE_FREE_GIB" "$GATE_AVAILABLE_MIB" "$MIN_FREE_INODES" "$GATE_LABEL" < "$PREFLIGHT"
 
@@ -231,6 +242,10 @@ if [ "$MODE" = prebuilt ]; then
   if $SSH "cd '$REMOTE_PKG_DIR' 2>/dev/null && echo '$TAR_SHA256  images.tar.gz' | sha256sum -c --status"; then
     echo "==> 服务器上已有摘要一致的 $REMOTE_PKG_DIR/images.tar.gz，复用，不再传"
   else
+    # 纯代码发布不扩大删除范围：任务目录里已有摘要不符的包，说不清是什么，不覆盖。
+    if [ "$CODE_ONLY" = 1 ] && $SSH "test -e '$REMOTE_PKG_DIR/images.tar.gz'"; then
+      echo "❌ $SSH_HOST:$REMOTE_PKG_DIR 里已有摘要不符的 images.tar.gz，--code-only 不覆盖也不删除，中止。请由人核实后处理。"; exit 1
+    fi
     echo "==> 传镜像包（$(( TAR_SIZE / 1048576 )) MiB）到 $SSH_HOST:$REMOTE_PKG_DIR/images.tar.gz.part ..."
     $SSH "mkdir -p '$REMOTE_PKG_DIR' && rm -f '$REMOTE_PKG_DIR/images.tar.gz.part' '$REMOTE_PKG_DIR/images.tar.gz'"
     scp -q -o BatchMode=yes "$PKG_DIR/images.tar.gz" "$SSH_HOST:$REMOTE_PKG_DIR/images.tar.gz.part"
@@ -453,7 +468,20 @@ else
   fi
 fi
 if [ "$MODE" = prebuilt ] && [ -n "$PKG_DIR" ]; then
-  rm -rf -- "$PKG_DIR" && echo "    已删除服务器上的镜像包 $PKG_DIR（清单已留在发布目录）"
+  if [ "$CODE_ONLY" = 1 ]; then
+    # 只删本次核过的两个文件：包摘要等于本次发布的包（本机留有同摘要副本），清单与发布目录里的副本相同。
+    # 目录里别的东西不是本次的，一律不碰；目录空了才去掉。摘要变了就全部留下。
+    if ( cd "$PKG_DIR" && echo "$PKG_SHA  images.tar.gz" | sha256sum -c --status ) && cmp -s "$PKG_DIR/MANIFEST.env" "$REL/IMAGE-MANIFEST.env"; then
+      rm -f -- "$PKG_DIR/images.tar.gz" "$PKG_DIR/MANIFEST.env"
+      if rmdir -- "$PKG_DIR" 2>/dev/null; then echo "    已删除本次上传的镜像包 $PKG_DIR（清单已留在发布目录）"; else echo "    已删除本次上传的两个文件；$PKG_DIR 里还有别的文件，保留"; fi
+      echo "STAGED_PACKAGE=removed-own-files" >> "$REL/RELEASE.txt"
+    else
+      echo "    ⚠ $PKG_DIR 里的包或清单与本次核过的不一致，全部保留，请由人核实"
+      echo "STAGED_PACKAGE=retained-not-verified" >> "$REL/RELEASE.txt"
+    fi
+  else
+    rm -rf -- "$PKG_DIR" && echo "    已删除服务器上的镜像包 $PKG_DIR（清单已留在发布目录）"
+  fi
 fi
 echo "    磁盘: $(df -h / | tail -1 | awk '{print $5" 已用，剩 "$4}')"
 echo "    发布目录: $REL"

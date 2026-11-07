@@ -12,6 +12,7 @@ DEPLOY = HERE / "deploy-docker.sh"
 LOCK = HERE / "docker-release-lock.sh"
 FIRST_SITE = HERE / "deploy.sh"
 DB_BACKUP = HERE.parent / "backend" / "scripts" / "db_backup.sh"
+REBUILD = HERE.parent / "rebuild.sh"
 
 
 def executable(path, body):
@@ -359,12 +360,13 @@ echo "ssh $*" >> "$TRACE"
 case "$*" in
   *"rev-parse --short HEAD"*) echo "$FAKE_REMOTE_SHORT";;
   *"APP_DIR="*) cat >/dev/null; echo /var/backups/ai-platform/mysql/ai_platform-1.sql.gz;;
-  *"bash -s"*) cat >/dev/null; echo "remote stage";;
+  *"bash -s"*) cat > "$STAGE"; echo "remote stage";;
 esac
 ''')
         executable(fake_bin / "scp", 'echo "scp $*" >> "$TRACE"\n')
         executable(fake_bin / "curl", 'exit 0\n')
-        self.env = os.environ | {"PATH": str(fake_bin) + os.pathsep + os.environ["PATH"], "TRACE": str(self.trace), "FAKE_REMOTE_SHORT": self.base_sha}
+        self.env = os.environ | {"PATH": str(fake_bin) + os.pathsep + os.environ["PATH"], "TRACE": str(self.trace), "FAKE_REMOTE_SHORT": self.base_sha, "STAGE": str(base / "stage.sh")}
+        self.stage = base / "stage.sh"
 
     def commit(self, path):
         (self.repo / path).parent.mkdir(parents=True, exist_ok=True)
@@ -406,6 +408,30 @@ esac
                 self.assertIn(path, self.out); self.assertIn("常规发布", self.out)
                 self.assertIsNone(self.backup_call()); self.assertNotIn("确认部署", self.out)
 
+    def rebuild_env_seen(self, rebuild_text):
+        """Run the tail of the remote stage in a directory holding a stub rebuild.sh; return what the stub saw, or None if it never ran."""
+        text = self.stage.read_text(); tail = text[text.index("# 纯代码发布不删历史日志"):]
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "rebuild.sh").write_text(rebuild_text + '(env | grep "^REBUILD_" || true; echo "args=[$*]") > seen.txt\n')
+            done = subprocess.run(["bash", "-e", "-c", tail], cwd=tmp, text=True, capture_output=True)
+            seen = Path(tmp) / "seen.txt"
+            return done, (seen.read_text().strip() if seen.exists() else None)
+
+    def test_code_only_passes_the_keep_logs_switch_and_refuses_a_rebuild_that_ignores_it(self):
+        self.commit("backend/src/a.js")
+        self.assertEqual(self.deploy("--server-first", "--code-only", "-y").returncode, 0, self.out)
+        done, seen = self.rebuild_env_seen("# knows REBUILD_KEEP_LOGS\n")
+        self.assertEqual(seen, "REBUILD_KEEP_LOGS=1\nargs=[--full]", done.stderr)
+        done, seen = self.rebuild_env_seen("# an old rebuild.sh\n")
+        self.assertIsNone(seen, "an old rebuild.sh would delete the logs, so it must not run")
+        self.assertNotEqual(done.returncode, 0); self.assertIn("不支持保留日志", done.stdout + done.stderr)
+
+    def test_normal_deploy_does_not_pass_the_keep_logs_switch(self):
+        self.commit("backend/src/a.js")
+        self.assertEqual(self.deploy("--server-first", "-y").returncode, 0, self.out)
+        done, seen = self.rebuild_env_seen("# an old rebuild.sh\n")
+        self.assertEqual(seen, "args=[--full]", done.stderr)
+
     def test_code_only_sees_a_migration_moved_out_of_its_directory(self):
         self.commit("backend/migrations/20270101_x.js")
         (self.repo / "backend/migrations/20270101_x.js").write_text("exports.up = async () => {};\n" * 40)
@@ -426,6 +452,50 @@ esac
                 self.assertFalse(any("scp" in line for line in self.lines))
         self.assertEqual(self.deploy("--server-first", "--code-only", stdin="y\n").returncode, 0, self.out)
         self.assertIsNotNone(self.backup_call())
+
+
+class RebuildLogRetentionTests(unittest.TestCase):
+    """The real rebuild.sh --restart with fake pm2/curl: which history logs survive."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        base = Path(self.temp.name)
+        self.project = base / "project"; self.home = base / "home"; self.trace = base / "trace"
+        fake_bin = base / "bin"; fake_bin.mkdir(); self.project.mkdir(); self.home.mkdir()
+        executable(fake_bin / "pm2", 'echo "pm2 $*" >> "$TRACE"\n')
+        executable(fake_bin / "curl", 'case "$*" in *http_code*) printf 200;; *) echo "{}";; esac\n')
+        executable(fake_bin / "sleep", 'exit 0\n')
+        (self.project / "backend").mkdir(); (self.project / "backend" / ".env").write_text("DB_PASSWORD=not-a-real-one\n")
+        self.script = base / "rebuild.sh"
+        self.script.write_text(REBUILD.read_text().replace("/var/www/ai-platform", str(self.project)))
+        self.logs = [self.home / ".pm2" / "logs" / "ai-platform-auth-out.log", self.project / "logs" / "backend" / "auth" / "combined.log",
+                     self.project / "logs" / "backend" / "auth" / "error.log", self.project / "logs" / "frontend" / "out.log"]
+        self.env = os.environ | {"PATH": str(fake_bin) + os.pathsep + os.environ["PATH"], "TRACE": str(self.trace), "HOME": str(self.home)}
+        self.env.pop("REBUILD_KEEP_LOGS", None)
+
+    def restart(self, **extra):
+        for log in self.logs:
+            log.parent.mkdir(parents=True, exist_ok=True); log.write_text("history\n")
+        self.trace.write_text("")
+        done = subprocess.run(["bash", str(self.script), "--restart"], env=self.env | extra, text=True, capture_output=True, stdin=subprocess.DEVNULL, timeout=120)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        return self.trace.read_text()
+
+    def test_keep_logs_leaves_every_history_log_and_still_restarts(self):
+        calls = self.restart(REBUILD_KEEP_LOGS="1")
+        for log in self.logs:
+            self.assertEqual(log.read_text(), "history\n", log)
+        self.assertNotIn("pm2 flush", calls)
+        self.assertIn("pm2 delete all", calls); self.assertIn("pm2 start", calls)
+
+    def test_without_the_switch_the_native_cleanup_is_unchanged(self):
+        for extra in ({}, {"REBUILD_KEEP_LOGS": "yes"}, {"REBUILD_KEEP_LOGS": "0"}):
+            with self.subTest(extra=extra):
+                calls = self.restart(**extra)
+                for log in self.logs:
+                    self.assertFalse(log.exists(), log)
+                self.assertIn("pm2 flush", calls); self.assertIn("pm2 start", calls)
 
 
 class DbBackupRetentionTests(unittest.TestCase):
