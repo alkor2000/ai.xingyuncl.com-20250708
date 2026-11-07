@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-11-04T03:09:11Z",
+  "updated_at": "2026-11-07T15:42:24Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -50,9 +50,9 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "12609f044a970050e67f4e147a8a47c6695ccbba8d3f2b98101ba18b0f5b969a",
-      "size": 391697,
-      "normalized_sha256": "12609f044a970050e67f4e147a8a47c6695ccbba8d3f2b98101ba18b0f5b969a"
+      "sha256": "e6a06ca9fbbbf6db34d9620e97f6fbcfa6502c20eae1aab711c1517687591ea4",
+      "size": 391885,
+      "normalized_sha256": "e6a06ca9fbbbf6db34d9620e97f6fbcfa6502c20eae1aab711c1517687591ea4"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -204,10 +204,9 @@
       "normalized_sha256": "ea02921bec725615d5584831e82ac545ad4394333c5fe0fa0292844c61312263"
     },
     "backend/scripts/db_backup.sh": {
-      "role": "index",
-      "sha256": "27906288ee872520077c3ac1226bcaccd78276f7b4abf8eba1836ccb30104602",
-      "size": 2268,
-      "normalized_sha256": "27906288ee872520077c3ac1226bcaccd78276f7b4abf8eba1836ccb30104602"
+      "sha256": "8a7d9db1d1bbad9ac3d46308b50459aa0c8528d702c1475de5e2f34adc2dd4e4",
+      "size": 2450,
+      "normalized_sha256": "8a7d9db1d1bbad9ac3d46308b50459aa0c8528d702c1475de5e2f34adc2dd4e4"
     },
     "backend/scripts/doc-template-smoke.cjs": {
       "sha256": "d841bffddd2dc4d416bf4b3527dcb9e2e66fecff0f6c3dca72782d8c838f1266",
@@ -385,6 +384,12 @@
       "sha256": "d5d7c09528c8d06f6dbffab24fa89cad9ae24bfb508d84889d8a44366aeec83d",
       "size": 13587,
       "normalized_sha256": "d5d7c09528c8d06f6dbffab24fa89cad9ae24bfb508d84889d8a44366aeec83d"
+    },
+    "backend/src/__tests__/unit/controllers/galleryPublicBoundary.test.js": {
+      "role": "observe",
+      "sha256": "efcb28fe1b3f94103544ca98e01561d8b81f1e1350425527fb1fe6ab0a19bd47",
+      "size": 9478,
+      "normalized_sha256": "efcb28fe1b3f94103544ca98e01561d8b81f1e1350425527fb1fe6ab0a19bd47"
     },
     "backend/src/__tests__/unit/middleware/aiLabUploadMiddleware.test.js": {
       "role": "observe",
@@ -1019,10 +1024,9 @@
       "normalized_sha256": "4888377b470183a98c727838978582dee7ddc7ed016345bfcfd14d7736119c6e"
     },
     "backend/src/controllers/imageController.js": {
-      "role": "index",
-      "sha256": "8bc6826cd6c76eef3ddda1f7b329f29bbea3185df6e00ce7f0de7c98d051976f",
-      "size": 19930,
-      "normalized_sha256": "8bc6826cd6c76eef3ddda1f7b329f29bbea3185df6e00ce7f0de7c98d051976f"
+      "sha256": "029bb7780071f59fb15de01142e3714bc05a75f3b7c67990160a40315ae07e17",
+      "size": 20340,
+      "normalized_sha256": "029bb7780071f59fb15de01142e3714bc05a75f3b7c67990160a40315ae07e17"
     },
     "backend/src/controllers/statsController.js": {
       "role": "index",
@@ -1031,10 +1035,9 @@
       "normalized_sha256": "d2186a2bb6bfd5dd641ec65fa80df54e0344307bbe911d1f311197f9aaf99145"
     },
     "backend/src/controllers/videoController.js": {
-      "role": "index",
-      "sha256": "be1e1a5e7ccb161d678a17a9f0567a86166aa0cab030dc9c8d8e73f473b36949",
-      "size": 21056,
-      "normalized_sha256": "be1e1a5e7ccb161d678a17a9f0567a86166aa0cab030dc9c8d8e73f473b36949"
+      "sha256": "e5dd8043481b1024e62023dc16d5432b3941404976a87be492e6be969d9401df",
+      "size": 21421,
+      "normalized_sha256": "e5dd8043481b1024e62023dc16d5432b3941404976a87be492e6be969d9401df"
     },
     "backend/src/database/connection.js": {
       "role": "index",
@@ -1278,10 +1281,9 @@
       "normalized_sha256": "f983ecd5607369e83df3d3d88ea3595496d518f0d651a3c8a4a38e131d74376f"
     },
     "backend/src/models/ImageGeneration.js": {
-      "role": "index",
-      "sha256": "587f1209d420b051bba498c342f6eb85233454713381983283f832b0aaec2061",
-      "size": 12061,
-      "normalized_sha256": "587f1209d420b051bba498c342f6eb85233454713381983283f832b0aaec2061"
+      "sha256": "35c69337d82f92591b631e72bcbbf5d800d0959c268a801a8156c5e20f6eca46",
+      "size": 13498,
+      "normalized_sha256": "35c69337d82f92591b631e72bcbbf5d800d0959c268a801a8156c5e20f6eca46"
     },
     "backend/src/models/ImageModel.js": {
       "role": "index",
@@ -1373,10 +1375,9 @@
       "normalized_sha256": "b83651ce7ab58db1c2d39518739afc9a0831dd0c8629f2cf3c090b32bcd1c965"
     },
     "backend/src/models/VideoGeneration.js": {
-      "role": "index",
-      "sha256": "00782e3f5db194a9fc4f6fcf8814f71438a1718e85a80d71a475f40f6f5089ed",
-      "size": 11633,
-      "normalized_sha256": "00782e3f5db194a9fc4f6fcf8814f71438a1718e85a80d71a475f40f6f5089ed"
+      "sha256": "306132a7108903e00b8b30d95193bd8d329513bb6123744811eb2f26d05dadaf",
+      "size": 13081,
+      "normalized_sha256": "306132a7108903e00b8b30d95193bd8d329513bb6123744811eb2f26d05dadaf"
     },
     "backend/src/models/VideoModel.js": {
       "role": "index",
