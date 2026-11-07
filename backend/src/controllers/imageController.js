@@ -365,7 +365,7 @@ class ImageController {
         return ResponseHelper.notFound(res, '记录不存在');
       }
       
-      if (generation.user_id !== userId && !generation.is_public) {
+      if (generation.user_id !== userId && !ImageGeneration.isPubliclyVisible(generation)) {
         return ResponseHelper.forbidden(res, '无权查看此记录');
       }
       
@@ -373,7 +373,9 @@ class ImageController {
         await ImageGeneration.incrementViewCount(id);
       }
       
-      return ResponseHelper.success(res, generation);
+      return ResponseHelper.success(res, generation.user_id === userId
+        ? generation
+        : ImageGeneration.toPublic(generation));
     } catch (error) {
       logger.error('获取生成记录失败:', error);
       return ResponseHelper.error(res, '获取记录失败');
@@ -501,12 +503,15 @@ class ImageController {
         return ResponseHelper.forbidden(res, '无权操作此记录');
       }
       
-      const success = await ImageGeneration.update(id, {
-        is_public: generation.is_public ? 0 : 1
-      });
+      const wasPublic = Number(generation.is_public) === 1;
+      const newPublicStatus = wasPublic ? 0 : 1;
+      if (newPublicStatus === 1 && generation.status !== 'success') {
+        return ResponseHelper.error(res, '仅成功完成的作品可以公开', 400);
+      }
+      const success = await ImageGeneration.updatePublic(id, userId, wasPublic, newPublicStatus === 1);
       
       if (!success) {
-        return ResponseHelper.error(res, '操作失败');
+        return ResponseHelper.error(res, '记录状态已变化，请刷新后重试', 409);
       }
       
       return ResponseHelper.success(res, null, '操作成功');

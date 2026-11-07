@@ -7,6 +7,13 @@
 const dbConnection = require('../database/connection');
 const logger = require('../utils/logger');
 
+// Only fields consumed by the public gallery/card/viewer; never expose source media or provider payloads.
+const PUBLIC_GENERATION_FIELDS = [
+  'id', 'user_id', 'status', 'is_public', 'is_favorite',
+  'prompt', 'local_path', 'thumbnail_path', 'resolution', 'duration',
+  'ratio', 'created_at', 'credits_consumed',
+];
+
 const KEYWORD_MAX_LENGTH = 100;
 
 function normalizeKeyword(keyword) {
@@ -18,6 +25,30 @@ function normalizeKeyword(keyword) {
 }
 
 class VideoGeneration {
+  static isPubliclyVisible(generation) {
+    return Number(generation.is_public) === 1 && generation.status === 'succeeded';
+  }
+
+  static toPublic(generation) {
+    const fields = [...PUBLIC_GENERATION_FIELDS, 'model_name', 'provider', 'username'];
+    return Object.fromEntries(fields
+      .filter(field => Object.prototype.hasOwnProperty.call(generation, field))
+      .map(field => [field, generation[field]]));
+  }
+
+  // Compare the state read by the controller at the write boundary. Status can
+  // change concurrently; only publication requires success, never withdrawal.
+  static async updatePublic(id, userId, wasPublic, makePublic) {
+    const params = [makePublic ? 1 : 0, id, userId, wasPublic ? 1 : 0];
+    let query = 'UPDATE video_generations SET is_public = ? WHERE id = ? AND user_id = ? AND is_public = ?';
+    if (makePublic) {
+      query += ' AND status = ?';
+      params.push('succeeded');
+    }
+    const result = await dbConnection.query(query, params);
+    return result.rows.affectedRows > 0;
+  }
+
   static async create(generationData) {
     try {
       const {
@@ -247,7 +278,8 @@ class VideoGeneration {
       const total = countResult.rows[0].total;
 
       const dataQuery = `
-        SELECT vg.*, vm.display_name as model_name, vm.provider,
+        SELECT ${PUBLIC_GENERATION_FIELDS.map(field => `vg.${field}`).join(', ')},
+               vm.display_name as model_name, vm.provider,
                u.username
         FROM video_generations vg
         LEFT JOIN video_models vm ON vg.model_id = vm.id
@@ -261,7 +293,7 @@ class VideoGeneration {
 
       return {
         data: dataResult.rows.map(item => ({
-          ...item,
+          ...VideoGeneration.toPublic(item),
           username: item.username || 'Anonymous'
         })),
         pagination: {

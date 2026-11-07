@@ -7,6 +7,14 @@
 const dbConnection = require('../database/connection');
 const logger = require('../utils/logger');
 
+// Only fields consumed by the public gallery/card/viewer; never expose source media or provider payloads.
+const PUBLIC_GENERATION_FIELDS = [
+  'id', 'user_id', 'status', 'is_public', 'is_favorite',
+  'prompt', 'negative_prompt', 'size', 'seed', 'guidance_scale',
+  'generation_mode', 'grid_layout', 'action_type', 'local_path', 'thumbnail_path',
+  'image_url', 'created_at', 'credits_consumed', 'view_count',
+];
+
 // 关键词最大长度（防止超长查询浪费资源）
 const KEYWORD_MAX_LENGTH = 100;
 
@@ -25,6 +33,30 @@ function normalizeKeyword(keyword) {
 }
 
 class ImageGeneration {
+  static isPubliclyVisible(generation) {
+    return Number(generation.is_public) === 1 && generation.status === 'success';
+  }
+
+  static toPublic(generation) {
+    const fields = [...PUBLIC_GENERATION_FIELDS, 'model_name', 'provider', 'username'];
+    return Object.fromEntries(fields
+      .filter(field => Object.prototype.hasOwnProperty.call(generation, field))
+      .map(field => [field, generation[field]]));
+  }
+
+  // Compare the state read by the controller at the write boundary. Status can
+  // change concurrently; only publication requires success, never withdrawal.
+  static async updatePublic(id, userId, wasPublic, makePublic) {
+    const params = [makePublic ? 1 : 0, id, userId, wasPublic ? 1 : 0];
+    let query = 'UPDATE image_generations SET is_public = ? WHERE id = ? AND user_id = ? AND is_public = ?';
+    if (makePublic) {
+      query += ' AND status = ?';
+      params.push('success');
+    }
+    const result = await dbConnection.query(query, params);
+    return result.rows.affectedRows > 0;
+  }
+
   static async create(data) {
     try {
       const {
