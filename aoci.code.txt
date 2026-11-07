@@ -19,7 +19,7 @@ ecosystem.config.js[OV6T]: F:C·PM2配置：ai-platform-auth(backend/src/server.
 manage-services.sh[OV2T]: F:C·PM2服务管理脚本(start/stop/restart/reload/status/logs/build) | R:code:ecosystem.config.js | A:- | S:脚本内$1被写成\$1，case匹配永远失败，实际不可用
 package-lock.json[FV2L]: F:C·根目录package.json的锁文件(ali-oss/axios/colors/mysql2) | R:code:package.json | A:- | S:-
 package.json[FV3T]: F:C·根目录package.json：仅为根目录一次性脚本提供ali-oss/axios/colors/mysql2依赖，无有效scripts，main指向ecosystem.config.js | R:code:ecosystem.config.js,code:backend/package.json | A:- | S:真正的应用依赖在backend/与frontend/各自的package.json
-rebuild.sh[OV7M]: F:C·生产重构部署脚本(--full默认/--restart/--build/--check)：环境检查(磁盘、nginx -t、pm2、MySQL)→NODE_OPTIONS 4G构建前端→pm2 delete all并清日志后pm2 start ecosystem→/health重试10次 | R:code:ecosystem.config.js,code:frontend/vite.config.js,code:backend/src/server.js | A:- | S:不装依赖、不跑迁移(由make deploy/make migrate负责)；会删掉全部PM2进程再重建，后端有秒级不可用；MySQL检查口令取DB_PASSWORD或backend/.env，缺失只告警；路径写死/var/www/ai-platform
+rebuild.sh[OV7M]: F:C·生产重构部署脚本(--full默认/--restart/--build/--check)：环境检查(磁盘、nginx -t、pm2、MySQL)→NODE_OPTIONS 4G构建前端→pm2 delete all并清日志后pm2 start ecosystem→/health重试10次 | R:code:ecosystem.config.js,code:frontend/vite.config.js,code:backend/src/server.js | A:- | S:不装依赖不跑迁移；重建PM2致秒级不可用；REBUILD_KEEP_LOGS=1(纯代码发布)不清历史日志；MySQL口令缺失只告警；路径写死/var/www/ai-platform
 run-tests.sh[TQ2T]: F:C·服务器上顺序跑backend npm test与frontend npm test --run并汇总 | R:code:frontend/vitest.config.js | A:- | S:路径写死/var/www/ai-platform
 update-db-snapshot.sh[OV2T]: F:C·mysqldump导出ai_platform全量快照并统计用户/对话/消息数，root口令取环境变量MYSQL_ROOT_PASSWORD | R:code:docker/scripts/migrate-data.sh | A:- | S:未设MYSQL_ROOT_PASSWORD即退出；输出路径写死服务器目录
 
