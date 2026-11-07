@@ -5,7 +5,9 @@ Fake ssh/scp/docker everywhere except RealImageRoundTrip, which uses the local D
 Never contacts production or any remote host."""
 import gzip
 import hashlib
+import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -256,6 +258,10 @@ class PrebuiltLocalRefusalTests(unittest.TestCase):
     def test_missing_package_files_are_refused(self):
         self.assert_refused_offline(self.deploy(self.repo / "nowhere"), "不存在")
 
+    def test_code_only_requires_the_prebuilt_path(self):
+        result = subprocess.run(["bash", "dev/deploy-docker.sh", "-y", "--code-only"], cwd=self.repo, env=self.env, text=True, capture_output=True)
+        self.assert_refused_offline(result, "--prebuilt")
+
 
 class PrebuiltOrderTests(unittest.TestCase):
     """The order of remote operations in prebuilt mode, against a fake ssh that answers each probe."""
@@ -290,6 +296,10 @@ case "$*" in
     if [[ "$*" == *" acquire "* ]]; then if [ "${FAKE_LOCK_HELD:-0}" = 1 ]; then echo "release lock held: token=other" >&2; exit 3; fi; echo "lock acquired"; exit 0; fi
     if [[ "$*" == *" release "* ]]; then echo "lock released"; exit 0; fi
     if [[ "$*" == *" resources "* ]]; then if [ "${FAKE_RESOURCES:-ok}" = ok ]; then echo "resources ready: disk=1 bytes memory=1 bytes inodes=1"; exit 0; fi; echo "insufficient ${FAKE_RESOURCES} resources" >&2; exit 1; fi
+    if [[ "$*" == *" sealed-parent"* ]]; then
+      if [ "${FAKE_SEALED:-ok}" = ok ]; then echo "parent=${FAKE_PARENT_SHA} backend=sha256:b frontend=sha256:f"; exit 0; fi
+      echo "ai-platform-backend is not the sealed release" >&2; exit 1
+    fi
     echo "REMOTE_MAIN"; exit 99;;
 esac
 ''')
@@ -299,10 +309,10 @@ esac
                                  "PM2_SSH_HOST": "fake-pm2", "DOCKER_SSH_HOST": "fake-docker", "FAKE_LOCAL_SHA": self.new}
         self.pkg = write_package(base / "pkg", self.new)
 
-    def deploy(self, remote_sha=None, **knobs):
+    def deploy(self, remote_sha=None, args=(), **knobs):
         env = self.env | {"FAKE_REMOTE_SHA": remote_sha or self.old} | {k: str(v) for k, v in knobs.items()}
         self.trace.write_text("")
-        result = subprocess.run(["bash", "dev/deploy-docker.sh", "-y", f"--prebuilt={self.pkg}"], cwd=self.repo, env=env, text=True, capture_output=True)
+        result = subprocess.run(["bash", "dev/deploy-docker.sh", "-y", f"--prebuilt={self.pkg}", *args], cwd=self.repo, env=env, text=True, capture_output=True)
         self.out = result.stdout + result.stderr
         self.lines = self.trace.read_text().splitlines() if self.trace.exists() else []
         return result
@@ -386,6 +396,84 @@ esac
         self.assertEqual(self.deploy(remote_sha=self.new, FAKE_RUNTIME="CURRENT").returncode, 0, self.out)
         self.assertIsNone(self.first(" acquire ")); self.assertIsNone(self.first("scp "))
 
+    def code_only(self, remote_sha=None, parent=None, **knobs):
+        return self.deploy(remote_sha, args=("--code-only",), FAKE_PARENT_SHA=parent or self.old, **knobs)
+
+    def retarget(self, path, text="x\n"):
+        """Commit one more change, point the package at it, return (previous head, new head)."""
+        before = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=self.repo, text=True).strip()
+        (self.repo / path).parent.mkdir(parents=True, exist_ok=True)
+        head = commit_pushed(self.repo, path, text, f"change {path}")
+        self.pkg = write_package(Path(self.temp.name) / "pkg-next", head)
+        self.env["FAKE_LOCAL_SHA"] = head
+        return before, head
+
+    def test_code_only_keeps_every_gate_in_order_and_tells_the_remote_stage(self):
+        self.assertNotEqual(self.code_only().returncode, 0, "fake remote main stage stops with 99")
+        order = [self.first(" sealed-parent"), self.first(" acquire "), self.first(" resources "), self.first("images.tar.gz.part"),
+                 self.first("sha256sum -c --status && mv"), self.first("bash -s /var/www/ai-platform")]
+        self.assertTrue(all(i is not None for i in order), (order, self.lines))
+        self.assertEqual(order, sorted(order), "parent binding → lock → gate → package → verify → remote stage")
+        self.assertIn(" resources 3 1024 100000 prebuilt", self.lines[order[2]], "--code-only does not relax the gate")
+        self.assertTrue(self.lines[order[-1]].endswith(" linux/amd64 1"), self.lines[order[-1]])
+        self.assertIn("发布方式:    纯代码", self.out)
+        self.assertIsNotNone(self.first(" release "), "the lock is given back")
+
+    def test_normal_release_never_probes_the_parent_and_stays_native(self):
+        self.deploy()
+        self.assertIsNone(self.first(" sealed-parent"))
+        self.assertTrue(self.lines[self.first("bash -s /var/www/ai-platform")].endswith(" linux/amd64 0"))
+        self.assertNotIn("纯代码", self.out)
+
+    def test_code_only_refuses_when_the_running_version_is_not_the_sealed_parent(self):
+        self.assertNotEqual(self.code_only(FAKE_SEALED="no").returncode, 0)
+        self.assertIn("封存的父版", self.out); self.assertIn("not the sealed release", self.out)
+        self.assertIsNone(self.first(" acquire ")); self.assertIsNone(self.first("scp "))
+
+    def test_code_only_refuses_a_parent_this_checkout_cannot_place_before_head(self):
+        self.assertNotEqual(self.code_only(parent="1" * 40).returncode, 0)
+        self.assertIn("不是本地 HEAD 的祖先", self.out)
+        self.assertIsNone(self.first(" acquire ")); self.assertIsNone(self.first("scp "))
+
+    def test_code_only_refuses_every_path_that_touches_the_database_or_container_startup(self):
+        for path in ("backend/migrations/20270101_x.js", "backend/knexfile.js", "database/migrations/x.sql", "database/schema/x.sql",
+                     "tools/database-upgrade/x.js", "docker/scripts/run-migrations.sh", "docker/Dockerfile.backend", "docker-compose.yml"):
+            with self.subTest(path=path):
+                before, _ = self.retarget(path, f"changed {path}\n")
+                self.assertNotEqual(self.code_only(remote_sha=before, parent=before).returncode, 0)
+                self.assertIn(path, self.out); self.assertIn("常规发布", self.out)
+                self.assertIsNone(self.first(" acquire ")); self.assertIsNone(self.first("scp "))
+
+    def test_code_only_sees_a_migration_moved_out_of_its_directory(self):
+        self.retarget("backend/migrations/20270101_x.js", "exports.up = async () => {};\n" * 40)
+        before = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=self.repo, text=True).strip()
+        subprocess.run(["git", "mv", "backend/migrations/20270101_x.js", "backend/x.js"], cwd=self.repo, check=True)
+        subprocess.run(["git", "commit", "-qm", "move it"], cwd=self.repo, check=True)
+        subprocess.run(["git", "push", "-q", "origin", "main"], cwd=self.repo, check=True)
+        head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=self.repo, text=True).strip()
+        self.pkg = write_package(Path(self.temp.name) / "pkg-moved", head); self.env["FAKE_LOCAL_SHA"] = head
+        self.assertNotEqual(self.code_only(remote_sha=before, parent=before).returncode, 0)
+        self.assertIn("backend/migrations/20270101_x.js", self.out)
+        self.assertIsNone(self.first(" acquire "))
+
+    def test_code_only_accepts_backend_code_docs_and_release_tooling(self):
+        for path in ("backend/src/controllers/imageController.js", "backend/scripts/db_backup.sh", "dev/RELEASE.md", ".aoci/baseline.json"):
+            with self.subTest(path=path):
+                before, _ = self.retarget(path)
+                self.code_only(remote_sha=before, parent=before)
+                self.assertIsNotNone(self.first("bash -s /var/www/ai-platform"), self.out)
+
+    def test_code_only_measures_from_the_running_parent_even_after_the_checkout_moved(self):
+        """Interrupted after code transfer: Git HEAD already equals the target, the running image does not."""
+        before, head = self.retarget("backend/src/app.js")
+        self.code_only(remote_sha=head, parent=before)
+        self.assertIsNotNone(self.first("bash -s /var/www/ai-platform"), "a clean retry proceeds")
+        self.assertIsNone(self.first(".bundle"), "the code is already there, no second bundle")
+        before, head = self.retarget("backend/migrations/20270101_x.js")
+        self.assertNotEqual(self.code_only(remote_sha=head, parent=before).returncode, 0)
+        self.assertIn("backend/migrations/20270101_x.js", self.out, "an empty Git-HEAD diff must not hide the migration")
+        self.assertIsNone(self.first(" acquire "))
+
 
 class PrebuiltRemoteStageTests(unittest.TestCase):
     """The server-side stage in prebuilt mode: load → verify → (backup → migrate → switch), never build."""
@@ -413,14 +501,19 @@ esac
         executable(self.bin / "docker", '''
 echo "docker $*" >> "$TRACE"
 if [[ "$1" == load ]]; then [ "${FAKE_LOAD_FAIL:-0}" = 1 ] && { echo "invalid tar header" >&2; exit 1; }; echo "Loaded image: x"; exit 0; fi
-if [[ "$1" == image && "$2" == inspect ]]; then echo sha256:old; exit 0; fi
+if [[ "$1" == image && "$2" == inspect ]]; then if [[ "$*" == *"json .Config.Cmd"* ]]; then echo "$FAKE_IMAGE_CMD"; else echo sha256:old; fi; exit 0; fi
+if [[ "$1" == logs ]]; then printf '%s\\n' "${FAKE_BACKEND_LOGS:-}"; exit 0; fi
 if [[ "$1" == inspect ]]; then
-  if [[ "$*" == *"{{.Config.Image}}"* ]]; then case "$*" in *backend*) echo ai-platform-backend:v-old;; *) echo ai-platform-frontend:v-old;; esac
+  if [[ "$*" == *"json .Config.Cmd"* ]]; then echo "$FAKE_CMD"
+  elif [[ "$*" == *"{{.Config.Image}}"* ]]; then case "$*" in *backend*) echo ai-platform-backend:v-old;; *) echo ai-platform-frontend:v-old;; esac
   elif [[ "$*" == *"{{.Image}}"* ]]; then echo sha256:running; fi
   exit 0
 fi
 if [[ "$1" == exec ]]; then echo 'CREATE TABLE fake_backup (id INT);'; exit 0; fi
-if [[ "$1" == images ]]; then exit 0; fi
+if [[ "$1" == images ]]; then
+  if [ "${FAKE_OLD_TAGS:-0}" = 1 ]; then for n in 1 2 3 4; do echo "v-abcdef0-2026092${n}_010000"; echo "rollback-2026092${n}_010000"; done; fi
+  exit 0
+fi
 if [[ "$1" == ps ]]; then echo 'ai-platform-backend running'; exit 0; fi
 if [[ "$1" == compose && " $* " == *" run "* ]]; then echo 'Already up to date'; exit 0; fi
 exit 0
@@ -434,7 +527,9 @@ exit 0
         self.task = "v-abcdef0-20261014_120000"
         self.lock = self.backups / "releases" / ".lock"
         self.env = os.environ | {"PATH": str(self.bin) + os.pathsep + os.environ["PATH"], "TRACE": str(self.trace),
-                                 "FAKE_ID_BACKEND": ID_B, "FAKE_ID_FRONTEND": ID_F}
+                                 "FAKE_ID_BACKEND": ID_B, "FAKE_ID_FRONTEND": ID_F,
+                                 "FAKE_CMD": '["su-exec","nodejs","node","src/server.js"]',
+                                 "FAKE_IMAGE_CMD": '["/bin/sh","-c","/usr/local/bin/run-migrations.sh && su-exec nodejs node src/server.js"]'}
 
     def remote_body(self):
         script = DEPLOY.read_text()
@@ -443,12 +538,14 @@ exit 0
         end = script.index("\nREMOTE\n", start)
         return script[start:end].replace("/var/backups/ai-platform", str(self.backups)) + "\n"
 
-    def run_remote(self, sha=None, id_b=ID_B, id_f=ID_F, **knobs):
+    def run_remote(self, sha=None, id_b=ID_B, id_f=ID_F, code_only=None, **knobs):
         token = "deploy-20261014-1-abcdef0"
         subprocess.run(["bash", str(LOCK), "acquire", str(self.lock), token], check=True, capture_output=True)
         self.trace.write_text("")
         args = [str(self.remote), "abcdef0", "3", "3", "1024", "100000", "7", "prebuilt", str(self.lock), token,
                 str(self.pkg), self.task, sha or self.sha, id_b, id_f, "linux/amd64"]
+        if code_only is not None:
+            args.append("1" if code_only else "0")
         result = subprocess.run(["bash", "-s", *args], input=self.remote_body(), env=self.env | {k: str(v) for k, v in knobs.items()},
                                 text=True, capture_output=True)
         self.output = result.stdout + result.stderr
@@ -491,6 +588,106 @@ exit 0
         self.assertFalse((self.backups / "releases" / "current").exists(), "current is not moved")
         self.assertTrue(self.pkg.exists(), "the package stays for diagnosis")
         self.assertFalse(self.lock.exists())
+
+    def seed_backups(self, count=9):
+        mysql = self.backups / "mysql"; mysql.mkdir(parents=True, exist_ok=True)
+        names = [f"ai_platform-202609{day:02d}_010000.sql.gz" for day in range(10, 10 + count)]
+        for name in names:
+            (mysql / name).write_text("old dump")
+        return mysql, names
+
+    def test_code_only_switches_without_knex_startup_sql_or_retention(self):
+        mysql, names = self.seed_backups()
+        result = self.run_remote(code_only=True, FAKE_OLD_TAGS=1)
+        self.assertEqual(result.returncode, 0, self.output)
+        self.assertIn("REMOTE_DONE", result.stdout)
+        for forbidden in ("migrate:latest", "compose build", "docker rmi", "prune"):
+            self.assertIsNone(self.first(forbidden), forbidden)
+        order = [self.first(f"load -i {self.pkg}/images.tar.gz"), self.first(f"image inspect ai-platform-backend:{self.task} --format {{{{json .Config.Cmd}}}}"),
+                 self.first("tag sha256:running ai-platform-backend:rollback-"), self.first("exec ai-platform-mysql"), self.first("up -d backend frontend"),
+                 self.first("docker inspect ai-platform-backend --format {{json .Config.Cmd}}")]
+        self.assertTrue(all(i is not None for i in order), self.lines)
+        self.assertEqual(order, sorted(order), "load → image CMD check → rollback tag → backup → switch → verify the command")
+        rel = self.backups / "releases" / f"ai-platform-{self.task}"
+        command = '    command: ["su-exec", "nodejs", "node", "src/server.js"]\n'
+        release = (rel / "release.override.yml").read_text()
+        self.assertIn(f"    image: ai-platform-backend:{self.task}\n{command}", release)
+        self.assertEqual(release.count("command:"), 1, "only the backend is changed")
+        rollback = (rel / "rollback.override.yml").read_text()
+        self.assertRegex(rollback, r"    image: ai-platform-backend:rollback-\d{8}_\d{6}\n" + command.replace("[", r"\[").replace("]", r"\]"))
+        self.assertEqual(rollback.count("command:"), 1)
+        text = (rel / "RELEASE.txt").read_text()
+        for line in ("RELEASE_KIND=code-only", "DB_MIGRATED=skipped-code-only", "STARTUP_MIGRATIONS=skipped-code-only",
+                     "RETENTION_CLEANUP=skipped-code-only", "CONTAINERS_SWITCHED=1", "REMOTE_HEALTHY=1", "FINAL_STATUS=RELEASED", "DB_BACKUP="):
+            self.assertIn(line, text)
+        self.assertNotIn("DB_MIGRATED=1", text)
+        survivors = sorted(p.name for p in mysql.iterdir())
+        self.assertEqual(len(survivors), len(names) + 1, "every old backup stays and this run's backup is added")
+        self.assertTrue(set(names) <= set(survivors))
+        self.assertFalse(self.pkg.exists(), "only this run's own staged package goes away")
+        self.assertFalse(self.lock.exists())
+
+    def test_code_only_refuses_an_image_with_another_cmd_before_anything_changes(self):
+        for image_cmd in ('["node","src/server.js"]', ""):
+            with self.subTest(image_cmd=image_cmd):
+                mysql, names = self.seed_backups()
+                result = self.run_remote(code_only=True, FAKE_IMAGE_CMD=image_cmd)
+                self.assertNotEqual(result.returncode, 0, self.output)
+                self.assertIn("--code-only 不适用", self.output)
+                self.assertIsNotNone(self.first(f"rmi ai-platform-backend:{self.task} ai-platform-frontend:{self.task}"), "only the tags this run loaded")
+                for forbidden in ("exec ai-platform-mysql", "migrate:latest", "up -d", "tag sha256:running"):
+                    self.assertIsNone(self.first(forbidden), forbidden)
+                rel = self.backups / "releases" / f"ai-platform-{self.task}"
+                self.assertFalse((rel / "RELEASE.txt").exists()); self.assertFalse((self.backups / "releases" / "current").exists())
+                self.assertTrue(all((mysql / name).exists() for name in names)); self.assertTrue(self.pkg.exists()); self.assertFalse(self.lock.exists())
+
+    def test_normal_path_never_inspects_the_image_cmd(self):
+        self.assertEqual(self.run_remote(FAKE_IMAGE_CMD='["node","src/server.js"]').returncode, 0, self.output)
+        self.assertIsNone(self.first("json .Config.Cmd"))
+
+    def test_code_only_is_not_released_if_the_startup_script_ran_or_the_command_is_not_replaced(self):
+        for knobs in ({"FAKE_BACKEND_LOGS": "检查数据库迁移..."}, {"FAKE_BACKEND_LOGS": "检查数据库迁移...\n" + "x" * 120000}, {"FAKE_CMD": '["/bin/sh","-c","/usr/local/bin/run-migrations.sh && su-exec nodejs node src/server.js"]'}, {"FAKE_CMD": ""}):
+            with self.subTest(knobs=knobs):
+                mysql, names = self.seed_backups()
+                result = self.run_remote(code_only=True, FAKE_OLD_TAGS=1, **knobs)
+                self.assertNotEqual(result.returncode, 0, self.output)
+                self.assertIn("回滚命令", self.output); self.assertNotIn("REMOTE_DONE", result.stdout)
+                text = (self.backups / "releases" / f"ai-platform-{self.task}" / "RELEASE.txt").read_text()
+                self.assertNotIn("FINAL_STATUS", text); self.assertNotIn("REMOTE_HEALTHY", text)
+                self.assertIsNone(self.first("docker rmi")); self.assertTrue(all((mysql / name).exists() for name in names))
+                self.assertTrue(self.pkg.exists(), "the package stays for a retry"); self.assertFalse(self.lock.exists())
+
+    def test_normal_path_still_migrates_runs_the_image_cmd_and_applies_retention(self):
+        for flag in (None, False):
+            with self.subTest(flag=flag):
+                if not self.pkg.exists():
+                    self.pkg.mkdir(); (self.pkg / "images.tar.gz").write_bytes(gzip.compress(b"fake")); (self.pkg / "MANIFEST.env").write_text("TASK=v\n")
+                    self.sha = sha256(self.pkg / "images.tar.gz")
+                mysql, names = self.seed_backups()
+                result = self.run_remote(code_only=flag, FAKE_OLD_TAGS=1)
+                self.assertEqual(result.returncode, 0, self.output)
+                self.assertIsNotNone(self.first("migrate:latest")); self.assertIsNotNone(self.first("docker rmi ai-platform-backend:"))
+                self.assertIsNone(self.first("json .Config.Cmd"))
+                rel = self.backups / "releases" / f"ai-platform-{self.task}"
+                self.assertNotIn("command:", (rel / "release.override.yml").read_text())
+                self.assertNotIn("command:", (rel / "rollback.override.yml").read_text())
+                text = (rel / "RELEASE.txt").read_text()
+                self.assertIn("DB_MIGRATED=1", text); self.assertNotIn("code-only", text)
+                self.assertEqual(len(list(mysql.iterdir())), 7, "the native keep-7 rule still applies")
+
+    @unittest.skipUnless(shutil.which("docker") and subprocess.run(["docker", "compose", "version"], capture_output=True).returncode == 0, "docker compose not installed")
+    def test_real_compose_merges_the_code_only_override_onto_the_real_compose_file(self):
+        self.assertEqual(self.run_remote(code_only=True).returncode, 0, self.output)
+        rel = self.backups / "releases" / f"ai-platform-{self.task}"
+        for name, image in (("release.override.yml", f"ai-platform-backend:{self.task}"), ("rollback.override.yml", "ai-platform-backend:rollback-")):
+            done = subprocess.run(["docker", "compose", "-f", str(HERE.parent / "docker-compose.yml"), "-f", str(rel / name), "config", "--format", "json", "--no-path-resolution"],
+                                  cwd=self.temp.name, capture_output=True, text=True)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            services = json.loads(done.stdout)["services"]
+            self.assertEqual(services["backend"]["command"], ["su-exec", "nodejs", "node", "src/server.js"])
+            self.assertTrue(services["backend"]["image"].startswith(image), services["backend"]["image"])
+            self.assertIsNone(services["backend"].get("entrypoint"), "no entrypoint override: the image's tini stays PID 1")
+            self.assertIsNone(services["frontend"].get("command"), "the frontend keeps its image CMD")
 
     def test_domain_platform_or_checksum_mismatch_refuses_before_any_switch(self):
         self.assertNotEqual(self.run_remote(FAKE_IMG_DOMAIN="ai.xingyuncl.com").returncode, 0)
@@ -595,6 +792,8 @@ cp "$FAKE_REMOTE_FS/$(basename "${src#*:}")" "$dst"
     def test_fetched_package_is_verified_and_remote_task_cleaned(self):
         self.stage_remote_package()
         result = self.build(FAKE_REMOTE_BUILD="done")
+        self.assertIn("--prebuilt=" + str(self.pkg_root), self.out)
+        self.assertRegex(self.out, r'make deploy-docker ARGS="--prebuilt=\S+ --code-only"', "the printed next step must offer the code-only form, not only the one that migrates and cleans up")
         self.assertEqual(result.returncode, 0, self.out)
         pkgs = [p for p in self.pkg_root.iterdir() if p.is_dir()]
         self.assertEqual(len(pkgs), 1)

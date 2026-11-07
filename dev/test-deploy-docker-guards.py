@@ -10,6 +10,8 @@ HERE = Path(__file__).resolve().parent
 PREFLIGHT = HERE / "docker-release-preflight.sh"
 DEPLOY = HERE / "deploy-docker.sh"
 LOCK = HERE / "docker-release-lock.sh"
+FIRST_SITE = HERE / "deploy.sh"
+DB_BACKUP = HERE.parent / "backend" / "scripts" / "db_backup.sh"
 
 
 def executable(path, body):
@@ -80,6 +82,49 @@ printf '              total used free shared buff/cache available\\nMem: 100000 
                                            FAKE_MEMORY=str(1024**3)).returncode, 0)
         self.assertNotEqual(self.run_check("resources", "8", "2048", "100000",
                                            FAKE_DISK=str(73 * 1024**3 // 10)).returncode, 0)
+
+    def sealed_root(self, commit="a" * 40, status="RELEASED", backend=None, frontend=None, manifest_commit=None, manifest_backend=None, drop_manifest=False):
+        same = "sha256:" + "c" * 64
+        root = self.bin / "releases"
+        current = root / "current"
+        current.mkdir(parents=True, exist_ok=True)
+        rows = [f"SOURCE_COMMIT={commit}", f"BACKEND_IMAGE_ID={backend or same}", f"FRONTEND_IMAGE_ID={frontend or same}"]
+        if status:
+            rows.append(f"FINAL_STATUS={status}")
+        (current / "RELEASE.txt").write_text("\n".join(rows) + "\n")
+        manifest = current / "IMAGE-MANIFEST.env"
+        if drop_manifest:
+            manifest.unlink(missing_ok=True)
+        else:
+            manifest.write_text(f"SOURCE_COMMIT={manifest_commit or commit}\nBACKEND_IMAGE_ID={manifest_backend or backend or same}\nFRONTEND_IMAGE_ID={frontend or same}\n")
+        return root
+
+    def test_sealed_parent_prints_the_commit_only_when_record_manifest_and_containers_agree(self):
+        same = "sha256:" + "c" * 64
+        ok = self.run_check("sealed-parent", str(self.sealed_root()), RUNNING_ID=same)
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        self.assertEqual(ok.stdout.strip(), f"parent={'a' * 40} backend={same} frontend={same}")
+        for label, record, env, needle in (
+            ("not released", {"status": None}, {}, "FINAL_STATUS"),
+            ("failed release", {"status": "FAILED"}, {}, "FINAL_STATUS"),
+            ("short commit", {"commit": "abcdef0"}, {}, "SOURCE_COMMIT"),
+            ("manifest of another commit", {"manifest_commit": "b" * 40}, {}, "SOURCE_COMMIT"),
+            ("manifest of another image", {"manifest_backend": "sha256:" + "d" * 64}, {}, "BACKEND_IMAGE_ID"),
+            ("no image IDs in the record", {"backend": "none"}, {}, "BACKEND_IMAGE_ID"),
+            ("no manifest", {"drop_manifest": True}, {}, "no sealed release record"),
+            ("running another image", {}, {"RUNNING_ID": "sha256:" + "e" * 64}, "not the sealed release"),
+            ("frontend record differs", {"frontend": "sha256:" + "f" * 64}, {}, "not the sealed release"),
+            ("unhealthy", {}, {"CONTAINER_HEALTH": "unhealthy"}, "not the sealed release"),
+            ("stopped", {}, {"CONTAINER_RUNNING": "false"}, "not the sealed release"),
+            ("paused", {}, {"CONTAINER_PAUSED": "true"}, "not the sealed release"),
+            ("restarting", {}, {"CONTAINER_RESTARTING": "true"}, "not the sealed release"),
+        ):
+            with self.subTest(label):
+                done = self.run_check("sealed-parent", str(self.sealed_root(**record)), **({"RUNNING_ID": same} | env))
+                self.assertNotEqual(done.returncode, 0, done.stdout)
+                self.assertEqual(done.stdout.strip(), "", "nothing a caller could take for a parent")
+                self.assertIn(needle, done.stderr)
+        self.assertNotEqual(self.run_check("sealed-parent", str(self.bin / "nowhere")).returncode, 0)
 
     def test_residual_healthy_does_not_hide_stopped_paused_or_restarting(self):
         for change in ({"CONTAINER_RUNNING": "false"},
@@ -284,6 +329,146 @@ if [[ "$*" == 'rev-parse HEAD' ]]; then echo abcdef0123456789; fi
         self.assertLess(rollback, backup)
         self.assertLess(backup, switch)
         self.assertLess(switch, cleanup)
+
+
+class FirstSiteCodeOnlyTests(unittest.TestCase):
+    """dev/deploy.sh --code-only against fake ssh/scp/curl: the scope gate, the backup gate, and the prompt that stays."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        base = Path(self.temp.name)
+        self.repo = base / "repo"
+        (self.repo / "dev").mkdir(parents=True)
+        (self.repo / "backend" / "scripts").mkdir(parents=True)
+        (self.repo / "dev" / "deploy.sh").write_bytes(FIRST_SITE.read_bytes())
+        (self.repo / "backend" / "scripts" / "db_backup.sh").write_bytes(DB_BACKUP.read_bytes())
+        (self.repo / "Makefile").write_text("build:\n\t@true\n")
+        run = lambda *a: subprocess.run(a, cwd=self.repo, check=True, capture_output=True)
+        run("git", "init", "-q", "-b", "main")
+        run("git", "config", "user.email", "test@example.invalid"); run("git", "config", "user.name", "test")
+        run("git", "add", "-A"); run("git", "commit", "-qm", "base")
+        self.base_sha = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=self.repo, text=True).strip()
+        bare = base / "origin.git"
+        subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
+        run("git", "remote", "add", "origin", str(bare)); run("git", "push", "-q", "origin", "main")
+        self.trace = base / "trace"
+        fake_bin = base / "bin"; fake_bin.mkdir()
+        executable(fake_bin / "ssh", '''
+echo "ssh $*" >> "$TRACE"
+case "$*" in
+  *"rev-parse --short HEAD"*) echo "$FAKE_REMOTE_SHORT";;
+  *"APP_DIR="*) cat >/dev/null; echo /var/backups/ai-platform/mysql/ai_platform-1.sql.gz;;
+  *"bash -s"*) cat >/dev/null; echo "remote stage";;
+esac
+''')
+        executable(fake_bin / "scp", 'echo "scp $*" >> "$TRACE"\n')
+        executable(fake_bin / "curl", 'exit 0\n')
+        self.env = os.environ | {"PATH": str(fake_bin) + os.pathsep + os.environ["PATH"], "TRACE": str(self.trace), "FAKE_REMOTE_SHORT": self.base_sha}
+
+    def commit(self, path):
+        (self.repo / path).parent.mkdir(parents=True, exist_ok=True)
+        (self.repo / path).write_text("x\n")
+        subprocess.run(["git", "add", "-A"], cwd=self.repo, check=True)
+        subprocess.run(["git", "commit", "-qm", f"change {path}"], cwd=self.repo, check=True)
+
+    def deploy(self, *args, stdin=""):
+        self.trace.write_text("")
+        result = subprocess.run(["bash", "dev/deploy.sh", *args], cwd=self.repo, env=self.env, input=stdin, text=True, capture_output=True)
+        self.out = result.stdout + result.stderr
+        self.lines = self.trace.read_text().splitlines()
+        return result
+
+    def backup_call(self):
+        return next((line for line in self.lines if "APP_DIR=" in line), None)
+
+    def test_code_only_backup_gate_adds_a_backup_without_retention(self):
+        self.commit("backend/src/a.js")
+        result = self.deploy("--server-first", "--code-only", "-y")
+        self.assertEqual(result.returncode, 0, self.out)
+        self.assertIn("BACKUP_RETENTION=skip bash -s", self.backup_call())
+        self.assertIn("发布方式:    纯代码", self.out)
+        self.assertTrue(any(line.endswith(" bash -s") and "APP_DIR=" not in line for line in self.lines), "the remote stage still runs")
+
+    def test_normal_deploy_keeps_the_native_backup_gate(self):
+        self.commit("backend/src/a.js")
+        self.assertEqual(self.deploy("--server-first", "-y").returncode, 0, self.out)
+        self.assertNotIn("BACKUP_RETENTION", self.backup_call())
+        self.assertNotIn("纯代码", self.out)
+
+    def test_code_only_refuses_database_and_startup_paths_before_the_prompt_and_backup(self):
+        for path in ("backend/migrations/x.js", "backend/knexfile.js", "database/migrations/x.sql", "tools/database-upgrade/x.js",
+                     "docker/scripts/run-migrations.sh", "docker-compose.yml"):
+            with self.subTest(path=path):
+                self.env["FAKE_REMOTE_SHORT"] = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=self.repo, text=True).strip()
+                self.commit(path)
+                self.assertNotEqual(self.deploy("--server-first", "--code-only", "-y").returncode, 0)
+                self.assertIn(path, self.out); self.assertIn("常规发布", self.out)
+                self.assertIsNone(self.backup_call()); self.assertNotIn("确认部署", self.out)
+
+    def test_code_only_sees_a_migration_moved_out_of_its_directory(self):
+        self.commit("backend/migrations/20270101_x.js")
+        (self.repo / "backend/migrations/20270101_x.js").write_text("exports.up = async () => {};\n" * 40)
+        subprocess.run(["git", "add", "-A"], cwd=self.repo, check=True); subprocess.run(["git", "commit", "-qm", "fill"], cwd=self.repo, check=True)
+        self.env["FAKE_REMOTE_SHORT"] = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=self.repo, text=True).strip()
+        subprocess.run(["git", "mv", "backend/migrations/20270101_x.js", "backend/x.js"], cwd=self.repo, check=True)
+        subprocess.run(["git", "commit", "-qm", "move it"], cwd=self.repo, check=True)
+        self.assertNotEqual(self.deploy("--server-first", "--code-only", "-y").returncode, 0)
+        self.assertIn("backend/migrations/20270101_x.js", self.out)
+        self.assertIsNone(self.backup_call())
+
+    def test_code_only_does_not_answer_the_confirmation_prompt(self):
+        self.commit("backend/src/a.js")
+        for stdin in ("", "n\n"):
+            with self.subTest(stdin=stdin):
+                self.assertNotEqual(self.deploy("--server-first", "--code-only", stdin=stdin).returncode, 0)
+                self.assertIsNone(self.backup_call(), "no backup, no transfer, no remote stage before a human says y")
+                self.assertFalse(any("scp" in line for line in self.lines))
+        self.assertEqual(self.deploy("--server-first", "--code-only", stdin="y\n").returncode, 0, self.out)
+        self.assertIsNotNone(self.backup_call())
+
+
+class DbBackupRetentionTests(unittest.TestCase):
+    """backend/scripts/db_backup.sh with a fake mysqldump: the keep rule, and the explicit no-retention switch."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        base = Path(self.temp.name)
+        self.app = base / "app"; (self.app / "backend").mkdir(parents=True)
+        (self.app / "backend" / ".env").write_text("DB_NAME=ai_platform\nDB_USER=u\nDB_PASSWORD=p\n")
+        self.dir = base / "backups"; self.dir.mkdir()
+        fake_bin = base / "bin"; fake_bin.mkdir()
+        executable(fake_bin / "mysqldump", 'echo "CREATE TABLE t (id INT);"\n')
+        self.env = os.environ | {"PATH": str(fake_bin) + os.pathsep + os.environ["PATH"], "APP_DIR": str(self.app), "BACKUP_DIR": str(self.dir)}
+        self.old = []
+        for n in range(14):
+            dump = self.dir / f"ai_platform-202610{n + 10:02d}_033000.sql.gz"
+            dump.write_text("old"); (self.dir / (dump.name + ".sha256")).write_text("x")
+            os.utime(dump, (1_700_000_000 + n, 1_700_000_000 + n))
+            self.old.append(dump)
+
+    def run_backup(self, **extra):
+        done = subprocess.run(["bash", str(DB_BACKUP)], env=self.env | extra, text=True, capture_output=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(len(done.stdout.strip().splitlines()), 1, "stdout stays exactly the new path")
+        return Path(done.stdout.strip())
+
+    def test_default_keeps_the_newest_fourteen_and_removes_the_oldest_pair(self):
+        new = self.run_backup()
+        self.assertTrue(new.exists())
+        self.assertEqual(len(list(self.dir.glob("*.sql.gz"))), 14)
+        self.assertFalse(self.old[0].exists()); self.assertFalse(Path(str(self.old[0]) + ".sha256").exists())
+
+    def test_explicit_skip_adds_the_backup_and_removes_nothing(self):
+        new = self.run_backup(BACKUP_RETENTION="skip")
+        self.assertTrue(new.exists()); self.assertTrue(Path(str(new) + ".sha256").exists())
+        self.assertEqual(len(list(self.dir.glob("*.sql.gz"))), 15)
+        self.assertTrue(all(dump.exists() for dump in self.old))
+
+    def test_any_other_value_is_not_a_way_to_skip(self):
+        self.run_backup(BACKUP_RETENTION="yes")
+        self.assertEqual(len(list(self.dir.glob("*.sql.gz"))), 14)
 
 
 class RealResourceProbe(unittest.TestCase):
