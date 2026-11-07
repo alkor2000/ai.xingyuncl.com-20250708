@@ -274,5 +274,6 @@ else
 fi
 echo ""
 echo "✅ 镜像包就绪: $PKG"
-echo "   下一步（先核 make status-docker 的现状）: make deploy-docker ARGS=--prebuilt=$PKG"
-echo "   纯代码发布（差量不含迁移与启动文件）改用: make deploy-docker ARGS=\"--prebuilt=$PKG --code-only\""
+echo "   下一步（先核 make status-docker 的现状），二选一，看清再复制："
+echo "     纯代码发布（差量不含迁移与启动文件）: make deploy-docker ARGS=\"--prebuilt=$PKG --code-only\""
+echo "     常规发布（会跑迁移，并清理旧镜像和旧库备份）: make deploy-docker ARGS=--prebuilt=$PKG"

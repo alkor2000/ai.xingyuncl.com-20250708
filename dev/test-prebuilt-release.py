@@ -425,6 +425,7 @@ esac
         self.assertIn(" resources 3 1024 100000 prebuilt", self.lines[order[3]], "--code-only does not relax the gate")
         self.assertTrue(self.lines[order[-1]].endswith(" linux/amd64 1"), self.lines[order[-1]])
         self.assertIn("发布方式:    纯代码", self.out)
+        self.assertIn("确认后会做:", self.out); self.assertIn("打 deploy-docker 标签并推送 GitHub", self.out)
         self.assertIsNotNone(self.first(" release "), "the lock is given back")
 
     def test_normal_release_never_probes_the_parent_and_stays_native(self):
@@ -432,6 +433,7 @@ esac
         self.assertIsNone(self.first(" sealed-parent"))
         self.assertTrue(self.lines[self.first("bash -s /var/www/ai-platform")].endswith(" linux/amd64 0"))
         self.assertNotIn("纯代码", self.out)
+        self.assertIn("发布方式:    常规：切换前跑 knex 迁移", self.out, "whoever confirms must see this route migrates and cleans up")
 
     def test_code_only_refuses_when_the_running_version_is_not_the_sealed_parent(self):
         self.assertNotEqual(self.code_only(FAKE_SEALED="no").returncode, 0)
@@ -861,7 +863,8 @@ cp "$FAKE_REMOTE_FS/$(basename "${src#*:}")" "$dst"
         self.stage_remote_package()
         result = self.build(FAKE_REMOTE_BUILD="done")
         self.assertIn("--prebuilt=" + str(self.pkg_root), self.out)
-        self.assertRegex(self.out, r'make deploy-docker ARGS="--prebuilt=\S+ --code-only"', "the printed next step must offer the code-only form, not only the one that migrates and cleans up")
+        self.assertRegex(self.out, r'纯代码发布[^\n]*make deploy-docker ARGS="--prebuilt=\S+ --code-only"', "the printed next step must offer the code-only form, labelled")
+        self.assertRegex(self.out, r'常规发布（会跑迁移，并清理旧镜像和旧库备份）: make deploy-docker ARGS=--prebuilt=\S+', "the form that migrates and cleans up must say so")
         self.assertEqual(result.returncode, 0, self.out)
         pkgs = [p for p in self.pkg_root.iterdir() if p.is_dir()]
         self.assertEqual(len(pkgs), 1)

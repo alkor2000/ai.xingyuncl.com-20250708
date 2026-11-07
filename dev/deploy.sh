@@ -72,6 +72,11 @@ if git --no-pager diff --name-only "$REMOTE_SHA..$LOCAL_SHA" 2>/dev/null | grep 
 fi
 if [ "$CODE_ONLY" = 1 ]; then
   echo "  发布方式:    纯代码（--code-only）：差量不含迁移与启动文件；备份门只新增备份、不删旧备份；重启不清历史日志"
+  if [ "$SERVER_FIRST" = 1 ]; then
+    echo "  确认后会做:  备份一份库 → 传码并 ff-only 合并 → 构建前端 → 重启 PM2（后端几秒不可用）→ 健康检查通过后推送 GitHub $BRANCH → 打 deploy 标签并推送"
+  else
+    echo "  确认后会做:  备份一份库 → 服务器 ff-only 合并（GitHub $BRANCH 已在预览前推送）→ 构建前端 → 重启 PM2（后端几秒不可用）→ 打 deploy 标签并推送"
+  fi
 fi
 echo "=========================================="
 if [ "$ASSUME_YES" != 1 ]; then

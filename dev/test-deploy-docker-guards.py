@@ -390,6 +390,7 @@ esac
         self.assertEqual(result.returncode, 0, self.out)
         self.assertIn("BACKUP_RETENTION=skip bash -s", self.backup_call())
         self.assertIn("发布方式:    纯代码", self.out)
+        self.assertIn("健康检查通过后推送 GitHub main", self.out, "the GitHub push must be on the screen the user confirms")
         self.assertTrue(any(line.endswith(" bash -s") and "APP_DIR=" not in line for line in self.lines), "the remote stage still runs")
 
     def test_normal_deploy_keeps_the_native_backup_gate(self):
