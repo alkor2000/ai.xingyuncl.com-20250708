@@ -451,6 +451,21 @@ esac
                 for forbidden in (" resources ", "scp ", "git fetch", "mkdir -p", "bash -s /var/www/ai-platform"):
                     self.assertIsNone(self.first(forbidden), forbidden)
 
+    def test_code_only_stops_when_ssh_fails_after_printing_the_same_identity(self):
+        """The identity line arrives intact and only then ssh dies: that read proves nothing."""
+        reviewed = f"parent={self.old} backend=sha256:b frontend=sha256:f"
+        fake = Path(self.temp.name) / "bin" / "ssh"; text = fake.read_text(); good = 'echo "$FAKE_SEALED_UNDER_LOCK"; exit 0'
+        self.assertEqual(text.count(good), 1)
+        fake.write_text(text.replace(good, 'echo "$FAKE_SEALED_UNDER_LOCK"; exit 255'))
+        self.assertNotEqual(self.code_only(FAKE_SEALED_UNDER_LOCK=reviewed).returncode, 0)
+        self.assertIn("封存父版变了或读不到", self.out); self.assertIn("退出码 255", self.out)
+        self.assertIsNotNone(self.first(" release "), "the lock is given back")
+        for forbidden in (" resources ", "scp ", "git fetch", "mkdir -p", "bash -s /var/www/ai-platform"):
+            self.assertIsNone(self.first(forbidden), forbidden)
+        fake.write_text(text)  # control: the same identity with a clean exit goes on to the gate and the transfer
+        self.code_only(FAKE_SEALED_UNDER_LOCK=reviewed)
+        self.assertIsNotNone(self.first(" resources ")); self.assertIsNotNone(self.first("bash -s /var/www/ai-platform"))
+
     def test_code_only_will_not_overwrite_an_unverified_package_in_the_task_directory(self):
         self.assertNotEqual(self.code_only(FAKE_REMOTE_TAR_EXISTS=1).returncode, 0)
         self.assertIn("不覆盖也不删除", self.out)

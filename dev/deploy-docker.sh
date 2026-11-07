@@ -216,9 +216,12 @@ LOCK_HELD=1
 # 差量是按确认前读到的父版审的；等确认和排队拿锁期间它可能变了。拿到锁后、任何传码传包之前再读一次，
 # 完整提交和两个镜像身份都要一字不差，否则这次核过的范围不再成立。
 if [ "$CODE_ONLY" = 1 ]; then
-  LOCKED_IDENTITY=$($SSH bash -s -- sealed-parent < "$PREFLIGHT" 2>/dev/null | grep -m1 '^parent=' || true)
-  if [ "$LOCKED_IDENTITY" != "$PARENT_IDENTITY" ]; then
-    echo "❌ 拿到发布锁后封存父版变了或读不到，中止；没有传码、没有传包。请重新核父版后再发。"
+  # 先留住完整输出和退出码，成功才解析：身份行打印完 ssh 才断，这次读取同样不算数。
+  LOCKED_RC=0; LOCKED_LINE=$($SSH bash -s -- sealed-parent < "$PREFLIGHT" 2>&1) || LOCKED_RC=$?
+  LOCKED_IDENTITY=""
+  if [ "$LOCKED_RC" = 0 ]; then LOCKED_IDENTITY=$(grep -m1 '^parent=' <<<"$LOCKED_LINE" || true); fi
+  if [ "$LOCKED_RC" != 0 ] || [ "$LOCKED_IDENTITY" != "$PARENT_IDENTITY" ]; then
+    echo "❌ 拿到发布锁后封存父版变了或读不到（退出码 $LOCKED_RC），中止；没有传码、没有传包。请重新核父版后再发。"
     echo "    确认时: $PARENT_IDENTITY"; echo "    现在:   ${LOCKED_IDENTITY:-<读不到>}"; exit 1
   fi
 fi
