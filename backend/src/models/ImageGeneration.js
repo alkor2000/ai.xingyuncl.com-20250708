@@ -7,6 +7,14 @@
 const dbConnection = require('../database/connection');
 const logger = require('../utils/logger');
 
+// Only fields consumed by the public gallery/card/viewer; never expose source media or provider payloads.
+const PUBLIC_GENERATION_FIELDS = [
+  'id', 'user_id', 'status', 'is_public', 'is_favorite',
+  'prompt', 'negative_prompt', 'size', 'seed', 'guidance_scale',
+  'generation_mode', 'grid_layout', 'action_type', 'local_path', 'thumbnail_path',
+  'image_url', 'created_at', 'credits_consumed', 'view_count',
+];
+
 // 关键词最大长度（防止超长查询浪费资源）
 const KEYWORD_MAX_LENGTH = 100;
 
@@ -25,6 +33,18 @@ function normalizeKeyword(keyword) {
 }
 
 class ImageGeneration {
+  static isPubliclyVisible(generation, decision) {
+    return Number(generation.is_public) === 1 && generation.status === 'success' &&
+      decision?.state === 'pass' && decision.gallery_state === 'approved' && Boolean(decision.file_key) &&
+      Number(decision.gallery_reviewer_id) > 0 && Number(decision.gallery_reviewer_id) !== Number(generation.user_id);
+  }
+
+  static toPublic(generation) {
+    const fields = [...PUBLIC_GENERATION_FIELDS, 'model_name', 'provider', 'username'];
+    return Object.fromEntries(fields.filter(field => Object.prototype.hasOwnProperty.call(generation, field))
+      .map(field => [field, generation[field]]));
+  }
+
   static async create(data) {
     try {
       const {

@@ -87,10 +87,10 @@ async function publish(id, userId) {
   });
 }
 async function asset(id, user, review = false) {
-  const { rows } = await db.query('SELECT vg.user_id,vg.is_public,s.* FROM video_generations vg JOIN video_safety s ON s.generation_id=vg.id WHERE vg.id=?', [id]);
+  const { rows } = await db.query('SELECT vg.user_id,vg.is_public,vg.status generation_status,s.* FROM video_generations vg JOIN video_safety s ON s.generation_id=vg.id WHERE vg.id=?', [id]);
   const row = rows[0];
   if (review) await authorize(id, user);
-  if (!row || (!review && (row.state !== 'pass' || (Number(row.user_id) !== Number(user.id) && (!row.is_public || row.gallery_state !== 'approved' || !row.reviewer_id || Number(row.reviewer_id) === Number(row.user_id)))))) throw error('视频不可访问', 404);
+  if (!row || (!review && (row.generation_status !== 'succeeded' || row.state !== 'pass' || (Number(row.user_id) !== Number(user.id) && (!row.is_public || row.gallery_state !== 'approved' || !row.reviewer_id || Number(row.reviewer_id) === Number(row.user_id)))))) throw error('视频不可访问', 404);
   const file = await store.verify(row.file_key, row.sha256).catch(() => { throw error('视频文件不可用或校验失败', 409); });
   if (review) await event(db.query.bind(db), id, user.id, 'review_view', row.state, 'restricted_full_video_preview', row.sha256);
   return file;

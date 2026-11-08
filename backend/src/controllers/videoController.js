@@ -274,16 +274,17 @@ class VideoController {
         return ResponseHelper.notFound(res, '记录不存在');
       }
 
+      const isOwner = Number(generation.user_id) === Number(userId);
       const decision = await videoSafety.get(id);
-      if (Number(generation.user_id) !== Number(userId) && (!generation.is_public || decision.state !== 'pass' || decision.gallery_state !== 'approved' || !decision.reviewer_id || Number(decision.reviewer_id) === Number(generation.user_id))) {
+      if (!isOwner && !VideoGeneration.isPubliclyVisible(generation, decision)) {
         return ResponseHelper.forbidden(res, '无权查看此记录');
       }
 
-      if (generation.is_public && generation.user_id !== userId) {
+      if (!isOwner) {
         await VideoGeneration.incrementViewCount(id);
       }
 
-      return ResponseHelper.success(res, await videoSafety.project(generation));
+      return ResponseHelper.success(res, await videoSafety.project(isOwner ? generation : VideoGeneration.toPublic(generation)));
     } catch (error) {
       logger.error('获取生成记录失败:', error);
       return ResponseHelper.error(res, '获取记录失败');

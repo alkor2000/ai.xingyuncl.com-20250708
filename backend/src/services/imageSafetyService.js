@@ -123,14 +123,14 @@ async function decide(id, actor, state, reason, revision) {
   });
 }
 async function asset(id, user, thumbnail = false, review = false) {
-  const { rows } = await db.query('SELECT ig.user_id,ig.is_public,s.* FROM image_generations ig JOIN image_safety s ON s.generation_id=ig.id WHERE ig.id=?', [id]);
+  const { rows } = await db.query('SELECT ig.user_id,ig.is_public,ig.status generation_status,s.* FROM image_generations ig JOIN image_safety s ON s.generation_id=ig.id WHERE ig.id=?', [id]);
   const row = rows[0];
   let admin = review === true && user.role === 'super_admin';
   if (review === 'teacher') {
     await require('./galleryReviewService').authorize(id, user);
     admin = true;
   }
-  if (!row || (!admin && (row.state !== 'pass' || (Number(row.user_id) !== Number(user.id) && (!row.is_public || row.gallery_state !== 'approved' || !row.gallery_reviewer_id || Number(row.gallery_reviewer_id) === Number(row.user_id)))))) throw error('图片不可访问', 404);
+  if (!row || (!admin && (row.generation_status !== 'success' || row.state !== 'pass' || (Number(row.user_id) !== Number(user.id) && (!row.is_public || row.gallery_state !== 'approved' || !row.gallery_reviewer_id || Number(row.gallery_reviewer_id) === Number(row.user_id)))))) throw error('图片不可访问', 404);
   const bytes = await fs.readFile(assetPath(row.file_key));
   if (hash(bytes) !== row.sha256) throw error('图片校验失败', 409);
   if (admin) await event(db.query.bind(db), id, user.id, 'review_view', row.state, 'restricted_preview', row.sha256);
