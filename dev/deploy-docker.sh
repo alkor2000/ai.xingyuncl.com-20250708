@@ -41,7 +41,7 @@ LOCK_DIR="/var/backups/ai-platform/releases/.lock"
 for v in "$PREBUILT_DISK_MARGIN_GIB" "$PREBUILT_MIN_AVAILABLE_MIB"; do
   [[ "$v" =~ ^[0-9]+$ ]] || { echo "❌ DOCKER_PREBUILT_* 阈值必须是非负整数（当前: $v）"; exit 1; }
 done
-ASSUME_YES=0; ALLOW_AHEAD=0; REBUILD=0; PKG_DIR=""; MODE=build; CODE_ONLY=0
+ASSUME_YES=0; ALLOW_AHEAD=0; REBUILD=0; PKG_DIR=""; MODE=build; CODE_ONLY=0; KEEP_HISTORY=0
 # 纯代码发布不许包含的路径：会碰库、或会改容器启动方式的文件。
 CODE_ONLY_FORBIDDEN='^(backend/migrations/|backend/knexfile\.js$|database/|tools/database-upgrade/|docker/|docker-compose\.yml$)'
 for a in "$@"; do
@@ -51,6 +51,7 @@ for a in "$@"; do
     --rebuild) REBUILD=1 ;;
     --prebuilt=*) PKG_DIR="${a#--prebuilt=}"; MODE=prebuilt ;;
     --code-only) CODE_ONLY=1 ;;
+    --keep-history) KEEP_HISTORY=1 ;;
     *) echo "未知参数: $a"; exit 1 ;;
   esac
 done
@@ -143,18 +144,20 @@ fi
 # 纯代码发布的前提，在拿锁和传任何东西之前核完。差量基准是"正在运行的封存父版"，不是服务器 Git HEAD：
 # Git HEAD 不代表运行中的镜像，传码后中断再重跑时它已经等于目标提交，拿它算差量永远是空的。
 PARENT_SHA=""; PARENT_IDENTITY=""
-if [ "$CODE_ONLY" = 1 ]; then
+if [ "$CODE_ONLY" = 1 ] || [ "$KEEP_HISTORY" = 1 ]; then
   if ! PARENT_LINE=$($SSH bash -s -- sealed-parent < "$PREFLIGHT" 2>&1); then
-    echo "❌ --code-only 要求运行中的版本就是发布记录封存的父版，当前不成立，中止："; echo "$PARENT_LINE" | sed 's/^/    /'; exit 1
+    echo "❌ 此发布模式要求运行中的版本就是发布记录封存的父版，当前不成立，中止："; echo "$PARENT_LINE" | sed 's/^/    /'; exit 1
   fi
   PARENT_IDENTITY=$(grep -m1 '^parent=' <<<"$PARENT_LINE" || true)
   PARENT_SHA=$(sed -n 's/^parent=\([0-9a-f]\{40\}\) .*/\1/p' <<<"$PARENT_IDENTITY")
   if [ -z "$PARENT_SHA" ] || ! git cat-file -e "$PARENT_SHA" 2>/dev/null || ! git merge-base --is-ancestor "$PARENT_SHA" "$LOCAL_SHA"; then
     echo "❌ 封存父版（${PARENT_LINE}）读不出来或不是本地 HEAD 的祖先，中止。"; exit 1
   fi
+  if [ "$CODE_ONLY" = 1 ]; then
   NOT_CODE=$(git --no-pager diff --no-renames --name-only "$PARENT_SHA" "$LOCAL_SHA" | grep -E "$CODE_ONLY_FORBIDDEN" || true)
   if [ -n "$NOT_CODE" ]; then
     echo "❌ --code-only 只发纯代码。父版 ${PARENT_SHA:0:7} 到本提交之间有这些会碰库或改启动方式的文件，请走常规发布："; echo "$NOT_CODE" | sed 's/^/    /'; exit 1
+  fi
   fi
 fi
 REMOTE_PLATFORM=""
@@ -199,7 +202,8 @@ if [ "$CODE_ONLY" = 1 ]; then
   echo "  确认后会做:  拿发布锁 → 再核封存父版 → 传码传包 → 加载并核镜像 → 备份一份库 → 切换容器（服务短暂不可用）→ 健康检查 → 打 deploy-docker 标签并推送 GitHub"
 else
   # 常规发布的行为不变；这一行只是让确认的人看清，避免把纯代码发布误走成这条路线。
-  echo "  发布方式:    常规：切换前跑 knex 迁移；容器启动跑 SQL 迁移脚本；切换成功后清理旧镜像和旧库备份"
+  echo "  发布方式:    常规：切换前跑 knex 迁移；容器启动跑 SQL 迁移脚本"
+  if [ "$KEEP_HISTORY" = 1 ]; then echo "  历史保留:    不清理旧镜像和旧库备份"; else echo "  清理策略:    切换成功后清理旧镜像和旧库备份"; fi
 fi
 echo "=============================================================="
 if [ "$ASSUME_YES" != 1 ]; then
@@ -219,7 +223,7 @@ LOCK_HELD=1
 
 # 差量是按确认前读到的父版审的；等确认和排队拿锁期间它可能变了。拿到锁后、任何传码传包之前再读一次，
 # 完整提交和两个镜像身份都要一字不差，否则这次核过的范围不再成立。
-if [ "$CODE_ONLY" = 1 ]; then
+if [ "$CODE_ONLY" = 1 ] || [ "$KEEP_HISTORY" = 1 ]; then
   # 先留住完整输出和退出码，成功才解析：身份行打印完 ssh 才断，这次读取同样不算数。
   LOCKED_RC=0; LOCKED_LINE=$($SSH bash -s -- sealed-parent < "$PREFLIGHT" 2>&1) || LOCKED_RC=$?
   LOCKED_IDENTITY=""
@@ -250,15 +254,19 @@ if [ "$MODE" = prebuilt ]; then
     echo "==> 服务器上已有摘要一致的 $REMOTE_PKG_DIR/images.tar.gz，复用，不再传"
   else
     # 纯代码发布不扩大删除范围：任务目录里已有摘要不符的包，说不清是什么，不覆盖。
-    if [ "$CODE_ONLY" = 1 ] && $SSH "test -e '$REMOTE_PKG_DIR/images.tar.gz'"; then
+    if { [ "$CODE_ONLY" = 1 ] || [ "$KEEP_HISTORY" = 1 ]; } && $SSH "test -e '$REMOTE_PKG_DIR/images.tar.gz'"; then
       echo "❌ $SSH_HOST:$REMOTE_PKG_DIR 里已有摘要不符的 images.tar.gz，--code-only 不覆盖也不删除，中止。请由人核实后处理。"; exit 1
     fi
     echo "==> 传镜像包（$(( TAR_SIZE / 1048576 )) MiB）到 $SSH_HOST:$REMOTE_PKG_DIR/images.tar.gz.part ..."
-    $SSH "mkdir -p '$REMOTE_PKG_DIR' && rm -f '$REMOTE_PKG_DIR/images.tar.gz.part' '$REMOTE_PKG_DIR/images.tar.gz'"
+    if [ "$KEEP_HISTORY" = 1 ]; then
+      $SSH "mkdir -p '$REMOTE_PKG_DIR' && test ! -e '$REMOTE_PKG_DIR/images.tar.gz.part' && test ! -e '$REMOTE_PKG_DIR/images.tar.gz'" || { echo 'STOP: existing package/partial retained; no overwrite'; exit 1; }
+    else
+      $SSH "mkdir -p '$REMOTE_PKG_DIR' && rm -f '$REMOTE_PKG_DIR/images.tar.gz.part' '$REMOTE_PKG_DIR/images.tar.gz'"
+    fi
     scp -q -o BatchMode=yes "$PKG_DIR/images.tar.gz" "$SSH_HOST:$REMOTE_PKG_DIR/images.tar.gz.part"
     if ! $SSH "cd '$REMOTE_PKG_DIR' && echo '$TAR_SHA256  images.tar.gz.part' | sha256sum -c --status && mv images.tar.gz.part images.tar.gz"; then
-      $SSH "rm -f '$REMOTE_PKG_DIR/images.tar.gz.part'" || true
-      echo "❌ 服务器上的包摘要不符（传输中断或损坏），已删除临时文件，没有加载；重跑会重新传。"; exit 1
+      if [ "$KEEP_HISTORY" != 1 ]; then $SSH "rm -f '$REMOTE_PKG_DIR/images.tar.gz.part'" || true; fi
+      echo "❌ 服务器上的包摘要不符；没有加载。保留历史模式下临时文件保留，请核实后再继续。"; exit 1
     fi
     echo "    服务器核对摘要一致"
   fi
@@ -268,13 +276,14 @@ fi
 # ---------- 3–5. 服务器上构建或加载、备份、迁移、切换、清理 ----------
 echo "==> 服务器$([ "$MODE" = prebuilt ] && echo 加载镜像 || echo 构建镜像)并切换 ..."
 REMOTE_LOG="$(mktemp)"
-$SSH bash -s "$REMOTE_DIR" "$LOCAL_SHORT" "$KEEP_RELEASES" "$GATE_FREE_GIB" "$GATE_AVAILABLE_MIB" "$MIN_FREE_INODES" "$KEEP_DB_BACKUPS" "$MODE" "$LOCK_DIR" "$LOCK_TOKEN" "$REMOTE_PKG_DIR" "$TASK" "$TAR_SHA256" "$BACKEND_IMAGE_ID" "$FRONTEND_IMAGE_ID" "$IMAGE_PLATFORM" "$CODE_ONLY" <<'REMOTE' | tee "$REMOTE_LOG"
+$SSH bash -s "$REMOTE_DIR" "$LOCAL_SHORT" "$KEEP_RELEASES" "$GATE_FREE_GIB" "$GATE_AVAILABLE_MIB" "$MIN_FREE_INODES" "$KEEP_DB_BACKUPS" "$MODE" "$LOCK_DIR" "$LOCK_TOKEN" "$REMOTE_PKG_DIR" "$TASK" "$TAR_SHA256" "$BACKEND_IMAGE_ID" "$FRONTEND_IMAGE_ID" "$IMAGE_PLATFORM" "$CODE_ONLY" "$KEEP_HISTORY" <<'REMOTE' | tee "$REMOTE_LOG"
 set -euo pipefail
 REMOTE_DIR="$1"; SHORT="$2"; KEEP="$3"
 MIN_FREE_GIB="$4"; MIN_AVAILABLE_MIB="$5"; MIN_FREE_INODES="$6"; KEEP_DB="${7:-7}"
 MODE="${8:-build}"; LOCK_DIR="${9:-}"; LOCK_TOKEN="${10:-}"
 PKG_DIR="${11:-}"; PKG_TASK="${12:-}"; PKG_SHA="${13:-}"; PKG_BACKEND_ID="${14:-}"; PKG_FRONTEND_ID="${15:-}"; PKG_PLATFORM="${16:-}"
 CODE_ONLY="${17:-0}"
+KEEP_HISTORY="${18:-0}"
 cd "$REMOTE_DIR"
 # 无论成败，退出时释放发布锁（只释放自己这把）。
 if [ -n "$LOCK_DIR" ] && [ -n "$LOCK_TOKEN" ]; then
@@ -442,10 +451,10 @@ docker ps --format '    {{.Names}}  {{.Image}}  {{.Status}}' | grep ai-platform
 echo "REMOTE_HEALTHY=1" >> "$REL/RELEASE.txt"
 echo "FINAL_STATUS=RELEASED" >> "$REL/RELEASE.txt"
 
-if [ "$CODE_ONLY" = 1 ]; then
+if [ "$CODE_ONLY" = 1 ] || [ "$KEEP_HISTORY" = 1 ]; then
   # 只跳过清理，不改保留份数：下一次常规发布照常按 KEEP/KEEP_DB 收回。
-  echo "    纯代码发布：不清理旧镜像、不清理旧库备份"
-  echo "RETENTION_CLEANUP=skipped-code-only" >> "$REL/RELEASE.txt"
+  echo "    历史保留：不清理旧镜像、不清理旧库备份"
+  if [ "$CODE_ONLY" = 1 ]; then echo "RETENTION_CLEANUP=skipped-code-only" >> "$REL/RELEASE.txt"; else echo "RETENTION_CLEANUP=skipped-keep-history" >> "$REL/RELEASE.txt"; fi
 else
   echo "    清理旧镜像（每个仓库保留最近 $KEEP 个发布及其 rollback；正在运行的镜像永远不删）..."
   # 标签形如 v-<sha>-<YYYYmmdd_HHMMSS> / rollback-<YYYYmmdd_HHMMSS>：按末尾 15 位完整时间戳倒序才是按时间。
@@ -475,7 +484,10 @@ else
   fi
 fi
 if [ "$MODE" = prebuilt ] && [ -n "$PKG_DIR" ]; then
-  if [ "$CODE_ONLY" = 1 ]; then
+  if [ "$KEEP_HISTORY" = 1 ]; then
+    echo "    历史保留：本次服务器镜像包目录也保留 $PKG_DIR"
+    echo "STAGED_PACKAGE=retained-keep-history" >> "$REL/RELEASE.txt"
+  elif [ "$CODE_ONLY" = 1 ]; then
     # 只删本次核过的两个文件：包摘要等于本次发布的包（本机留有同摘要副本），清单与发布目录里的副本相同。
     # 目录里别的东西不是本次的，一律不碰；目录空了才去掉。摘要变了就全部留下。
     if ( cd "$PKG_DIR" && echo "$PKG_SHA  images.tar.gz" | sha256sum -c --status ) && cmp -s "$PKG_DIR/MANIFEST.env" "$REL/IMAGE-MANIFEST.env"; then

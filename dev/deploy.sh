@@ -14,7 +14,7 @@ SSH_HOST="${SSH_HOST:-practice}"
 REMOTE_DIR="${REMOTE_DIR:-/var/www/ai-platform}"
 HEALTH_URL="${HEALTH_URL:-https://ai.xingyuncl.com/health}"
 BRANCH="$(git -C "$ROOT" branch --show-current)"
-ASSUME_YES=0; SERVER_FIRST=0; CODE_ONLY=0
+ASSUME_YES=0; SERVER_FIRST=0; CODE_ONLY=0; KEEP_HISTORY=0; PREPARED_MIGRATIONS=0
 # 纯代码发布不许包含的路径：会碰库、或会改容器启动方式的文件（与 dev/deploy-docker.sh 同一份清单）。
 CODE_ONLY_FORBIDDEN='^(backend/migrations/|backend/knexfile\.js$|database/|tools/database-upgrade/|docker/|docker-compose\.yml$)'
 for arg in "$@"; do
@@ -22,9 +22,14 @@ for arg in "$@"; do
     -y) ASSUME_YES=1 ;;
     --server-first) SERVER_FIRST=1 ;;
     --code-only) CODE_ONLY=1 ;;
+    --keep-history) KEEP_HISTORY=1 ;;
+    --prepared-migrations) PREPARED_MIGRATIONS=1 ;;
     *) echo "未知参数: $arg"; exit 1 ;;
   esac
 done
+if [ "$PREPARED_MIGRATIONS" = 1 ]; then
+  [ "$CODE_ONLY" = 0 ] && [ "$SERVER_FIRST" = 1 ] && [ "$KEEP_HISTORY" = 1 ] || { echo 'STOP: prepared migrations require --server-first --keep-history and exclude --code-only'; exit 2; }
+fi
 
 cd "$ROOT"
 
@@ -51,6 +56,10 @@ fi
 
 # 2. 显示即将部署的内容
 LOCAL_SHA=$(git rev-parse --short HEAD)
+TARGET_FULL=$(git rev-parse HEAD)
+STAGE="/var/backups/ai-platform/releases/migration-$TARGET_FULL"
+STAGE_HELPER_SHA=""
+if [ "$PREPARED_MIGRATIONS" = 1 ]; then STAGE_HELPER_SHA=$(sha256sum "$ROOT/dev/migration-stage.cjs" | cut -d' ' -f1); fi
 REMOTE_SHA=$(ssh -n -o BatchMode=yes "$SSH_HOST" "cd $REMOTE_DIR && git rev-parse --short HEAD")
 git merge-base --is-ancestor "$REMOTE_SHA" HEAD || { echo "❌ 首站提交不是本地 HEAD 的祖先，中止。"; exit 1; }
 if [ "$CODE_ONLY" = 1 ]; then
@@ -68,7 +77,11 @@ git --no-pager log --oneline "$REMOTE_SHA..$LOCAL_SHA" 2>/dev/null | sed 's/^/  
 echo "  变更文件:"
 git --no-pager diff --stat "$REMOTE_SHA..$LOCAL_SHA" 2>/dev/null | tail -1 | sed 's/^/    /' || true
 if git --no-pager diff --name-only "$REMOTE_SHA..$LOCAL_SHA" 2>/dev/null | grep -q '^backend/migrations/'; then
-  echo "  ⚠ 本次含 knex 迁移文件：rebuild.sh 不跑迁移，发布后按 dev/RELEASE.md 第三节执行 make migrate-status / make migrate"
+  if [ "$PREPARED_MIGRATIONS" = 1 ]; then
+    echo "  迁移要求: 三项预置迁移必须已有匹配本候选的成功回执；应用切换前再次校验"
+  else
+    echo "  ⚠ 本次含 knex 迁移文件：rebuild.sh 不跑迁移；加法迁移须先完成，不得发布后补迁移"
+  fi
 fi
 if [ "$CODE_ONLY" = 1 ]; then
   echo "  发布方式:    纯代码（--code-only）：差量不含迁移与启动文件；备份门只新增备份、不删旧备份；重启不清历史日志"
@@ -78,23 +91,52 @@ if [ "$CODE_ONLY" = 1 ]; then
     echo "  确认后会做:  备份一份库 → 服务器 ff-only 合并（GitHub $BRANCH 已在预览前推送）→ 构建前端 → 重启 PM2（后端几秒不可用）→ 打 deploy 标签并推送"
   fi
 fi
+if [ "$KEEP_HISTORY" = 1 ]; then echo "  历史保留: 不清理旧数据库备份及重启日志；迁移策略不由该选项改变"; fi
 echo "=========================================="
 if [ "$ASSUME_YES" != 1 ]; then
   read -rp "确认部署到生产 ai.xingyuncl.com? [y/N] " ans
   [ "$ans" = y ] || [ "$ans" = Y ] || { echo "已取消"; exit 1; }
 fi
 
+# Prepared application switching shares the SAME native lock as migration preparation.
+# A lost SSH may leave backup/rebuild running: only confirmed terminal success permits
+# automatic release. The original owner must reconcile any unknown outcome.
+PREPARED_LOCK=/var/backups/ai-platform/releases/.lock
+PREPARED_TOKEN="teacher-deploy-$TARGET_FULL-$$-$(date +%s)"
+PREPARED_LOCK_HELD=0; PREPARED_REMOTE_TERMINAL=0; BUNDLE=""
+finish_deploy() {
+  rc=$?
+  trap - EXIT
+  if [ "$PREPARED_LOCK_HELD" = 1 ] && [ "$PREPARED_REMOTE_TERMINAL" != 1 ]; then
+    echo "UNKNOWN: retain original lock $PREPARED_TOKEN and staged evidence; no retry/unlock" >&2
+    [ "$rc" != 0 ] || rc=31
+  else
+    if [ -n "$BUNDLE" ]; then rm -f -- "$BUNDLE"; fi
+    if [ "$PREPARED_LOCK_HELD" = 1 ]; then
+      if ! ssh -n -o BatchMode=yes "$SSH_HOST" bash "$REMOTE_DIR/dev/docker-release-lock.sh" release "$PREPARED_LOCK" "$PREPARED_TOKEN"; then
+        echo 'UNKNOWN: own prepared deployment lock release not confirmed' >&2
+        [ "$rc" != 0 ] || rc=30
+      fi
+    fi
+  fi
+  exit "$rc"
+}
+trap finish_deploy EXIT
+if [ "$PREPARED_MIGRATIONS" = 1 ]; then
+  ssh -n -o BatchMode=yes "$SSH_HOST" bash "$REMOTE_DIR/dev/docker-release-lock.sh" acquire "$PREPARED_LOCK" "$PREPARED_TOKEN"
+  PREPARED_LOCK_HELD=1
+fi
+
 # 3. 备份门：发布前先做一份数据库备份（约 112MB 库，几秒钟）
 echo "==> 发布前数据库备份 ..."
 BACKUP_ENV="APP_DIR=$REMOTE_DIR"
-if [ "$CODE_ONLY" = 1 ]; then BACKUP_ENV="$BACKUP_ENV BACKUP_RETENTION=skip"; fi
+if [ "$CODE_ONLY" = 1 ] || [ "$KEEP_HISTORY" = 1 ]; then BACKUP_ENV="$BACKUP_ENV BACKUP_RETENTION=skip"; fi
 BK=$(ssh -o BatchMode=yes "$SSH_HOST" "$BACKUP_ENV bash -s" < "$ROOT/backend/scripts/db_backup.sh")
 echo "    备份: $BK"
 
 # 首站优先时只传已提交对象，不同步工作区、配置或上传数据。
 if [ "$SERVER_FIRST" = 1 ] && [ "$REMOTE_SHA" != "$LOCAL_SHA" ]; then
   BUNDLE=$(mktemp /tmp/ai-platform-release.XXXXXX.bundle)
-  trap 'rm -f "$BUNDLE"' EXIT
   git bundle create "$BUNDLE" "$REMOTE_SHA..$BRANCH"
   scp -q -o BatchMode=yes "$BUNDLE" "$SSH_HOST:/var/tmp/ai-platform-$LOCAL_SHA.bundle"
 fi
@@ -127,7 +169,10 @@ if ! git merge-base --is-ancestor HEAD \$TARGET; then
   git status -sb | head -1
   exit 1
 fi
-if [ -n "\$(git status --porcelain)" ]; then
+if [ "$PREPARED_MIGRATIONS" = 1 ]; then
+  [ "\$(sha256sum '$STAGE/migration-stage.cjs' | cut -d' ' -f1)" = "$STAGE_HELPER_SHA" ] || { echo 'STOP: staged verifier bytes changed'; exit 1; }
+  node "$STAGE/migration-stage.cjs" verify-completed "$REMOTE_DIR" "$TARGET_FULL" "$STAGE" || exit 1
+elif [ -n "\$(git status --porcelain)" ]; then
   echo "❌ 服务器工作区不干净（有人直接改了生产文件），中止："; git status --short | head -20; exit 1
 fi
 git checkout -q $BRANCH
@@ -141,12 +186,13 @@ if git diff --name-only $REMOTE_SHA HEAD | grep -qE '^frontend/(package(-lock)?\
   echo "==> frontend 依赖有变化，npm ci ..."; ( cd frontend && npm ci --no-audit --no-fund )
 fi
 # 纯代码发布不删历史日志：rebuild.sh 刚随本次提交合入，核一下它认这个开关，不认就不重启。
-if [ "$CODE_ONLY" = 1 ]; then
+if [ "$CODE_ONLY" = 1 ] || [ "$KEEP_HISTORY" = 1 ]; then
   grep -q REBUILD_KEEP_LOGS rebuild.sh || { echo "❌ 服务器上的 rebuild.sh 不支持保留日志，中止；服务没有重启。"; exit 1; }
   export REBUILD_KEEP_LOGS=1
 fi
 bash rebuild.sh --full
 EOF
+if [ "$PREPARED_MIGRATIONS" = 1 ]; then PREPARED_REMOTE_TERMINAL=1; fi
 
 # 首站运行健康才更新 GitHub；推送冲突时停在首站，不继续 Docker 发布。
 echo "==> 首站健康检查 ..."

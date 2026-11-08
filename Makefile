@@ -85,10 +85,22 @@ migrate-status: ## 查看生产库 knex 迁移状态
 	ssh -n $(SSH_HOST) '$(NVM); cd $(REMOTE_DIR)/backend && npx knex migrate:status'
 
 .PHONY: migrate
-migrate: ## 在生产库执行待执行的 knex 迁移（先备份门，再 migrate:latest；见 dev/RELEASE.md 第三节）
+migrate: ## 原迁移入口；ARGS=--prepared 核验已预置的三项老师审核迁移后运行备份门
+	@if [ "$(ARGS)" = --prepared ]; then bash $(ROOT)/dev/prepare-migrations.sh migrate; elif [ -z "$(ARGS)" ]; then $(MAKE) migrate-native; else echo '未知迁移参数'; exit 2; fi
+
+.PHONY: prepare-migrations
+prepare-migrations: ## 仅预置已提交的三项老师审核迁移，不切应用、不连库迁移
+	bash $(ROOT)/dev/prepare-migrations.sh prepare
+
+.PHONY: migrate-native
+migrate-native: ## 原备份与knex执行步骤；prepared路径在持有原生锁时调用
 	@read -rp "确认在生产库执行 knex migrate:latest? [y/N] " a; [ "$$a" = y ] || exit 1
-	ssh $(SSH_HOST) 'APP_DIR=$(REMOTE_DIR) bash -s' < $(BE_DIR)/scripts/db_backup.sh
-	ssh -n $(SSH_HOST) '$(NVM); cd $(REMOTE_DIR)/backend && npx knex migrate:latest && npx knex migrate:status'
+	@if [ -n "$(PREPARED_TARGET)" ]; then \
+	  ssh -n $(SSH_HOST) '$(NVM); node /var/backups/ai-platform/releases/migration-$(PREPARED_TARGET)/migration-stage.cjs native $(REMOTE_DIR) $(PREPARED_TARGET) /var/backups/ai-platform/releases/migration-$(PREPARED_TARGET) $(PREPARED_TOKEN)'; \
+	else \
+	  ssh $(SSH_HOST) 'APP_DIR=$(REMOTE_DIR) BACKUP_RETENTION=$(BACKUP_RETENTION) bash -s' < $(BE_DIR)/scripts/db_backup.sh && \
+	  ssh -n $(SSH_HOST) '$(NVM); cd $(REMOTE_DIR)/backend && npx knex migrate:latest && npx knex migrate:status'; \
+	fi
 
 .PHONY: deploy-docker
 deploy-docker: ## 发布到 Docker 站点 ai.pkuailab.com（先 make deploy；bundle 传码 → 构建镜像 → 备份库 → 迁移 → 切换 → 健康检查；ARGS=--prebuilt=<包目录> 则只加载 make build-images 的镜像包，不在站点构建）
