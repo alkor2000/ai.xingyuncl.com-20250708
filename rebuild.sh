@@ -6,6 +6,7 @@
 #   --restart 只重启服务: 停止→清理日志→启动→验证
 #   --build   只构建前端: 不重启服务
 #   --check   只做环境检查: 不构建不重启
+# 环境变量: REBUILD_KEEP_LOGS=1 重启时不清历史日志（纯代码发布 dev/deploy.sh --code-only 用；其他值照常清理）
 # ============================================================
 
 set -euo pipefail
@@ -201,12 +202,16 @@ restart_services() {
     # 停止所有PM2进程
     pm2 delete all 2>/dev/null || true
 
-    # 清理日志文件
-    pm2 flush 2>/dev/null || true
-    rm -rf ~/.pm2/logs/*
-    rm -f "${LOG_DIR}"/backend/auth/*.log "${LOG_DIR}"/frontend/*.log 2>/dev/null || true
+    # 清理日志文件；纯代码发布不删历史运行日志
+    if [ "${REBUILD_KEEP_LOGS:-}" = 1 ]; then
+        info "纯代码发布：保留历史日志"
+    else
+        pm2 flush 2>/dev/null || true
+        rm -rf ~/.pm2/logs/*
+        rm -f "${LOG_DIR}"/backend/auth/*.log "${LOG_DIR}"/frontend/*.log 2>/dev/null || true
+        info "日志已清理"
+    fi
     mkdir -p "${LOG_DIR}/backend/auth" "${LOG_DIR}/frontend"
-    info "日志已清理"
 
     # 启动服务
     pm2 start "$ECOSYSTEM"

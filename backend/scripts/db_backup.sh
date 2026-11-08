@@ -7,6 +7,7 @@
 # 环境变量:      APP_DIR   项目根（默认 /var/www/ai-platform）
 #               DB        库名（默认取 .env 的 DB_NAME）
 #               KEEP      保留份数（默认 14）
+#               BACKUP_RETENTION=skip  只新增这一份、不删任何旧备份（纯代码发布的备份门用；KEEP 不变）
 #               BACKUP_DIR 输出目录（默认 /var/backups/ai-platform/mysql）
 set -euo pipefail
 APP_DIR="${APP_DIR:-/var/www/ai-platform}"
@@ -38,5 +39,7 @@ gzip -t "$TMP"
 mv "$TMP" "$OUT"; chmod 600 "$OUT"
 sha256sum "$OUT" | awk '{print $1}' > "$OUT.sha256"
 # 只保留最近 KEEP 份
-ls -t "$BACKUP_DIR"/"${DB}"-*.sql.gz 2>/dev/null | tail -n +$((KEEP + 1)) | while read -r f; do rm -f "$f" "$f.sha256"; done || true
+if [ "${BACKUP_RETENTION:-}" != skip ]; then
+  ls -t "$BACKUP_DIR"/"${DB}"-*.sql.gz 2>/dev/null | tail -n +$((KEEP + 1)) | while read -r f; do rm -f "$f" "$f.sha256"; done || true
+fi
 echo "$OUT"

@@ -29,6 +29,39 @@ case "${1:-}" in
     done
     echo CURRENT
     ;;
+  sealed-parent)
+    # 运行中的封存父版：current 发布记录、其镜像清单、两个运行容器必须是同一份且健康，否则非零退出。
+    # 成功时打印 parent=<完整提交> backend=<镜像 ID> frontend=<镜像 ID>，deploy-docker --code-only 拿它当差量基准。
+    root="${2:-/var/backups/ai-platform/releases}"
+    record="$root/current/RELEASE.txt"; manifest="$root/current/IMAGE-MANIFEST.env"
+    [ -r "$record" ] && [ -r "$manifest" ] || { echo "no sealed release record under $root/current" >&2; exit 1; }
+    field() { sed -n "s/^$2=//p" "$1" | head -1; }
+    commit=$(field "$record" SOURCE_COMMIT)
+    [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "RELEASE.txt SOURCE_COMMIT is not a full commit: ${commit:-<missing>}" >&2; exit 1; }
+    status=$(field "$record" FINAL_STATUS)
+    [ "$status" = RELEASED ] || { echo "RELEASE.txt FINAL_STATUS is ${status:-<missing>}, not RELEASED" >&2; exit 1; }
+    manifest_commit=$(field "$manifest" SOURCE_COMMIT)
+    [ "$manifest_commit" = "$commit" ] || { echo "image manifest SOURCE_COMMIT ${manifest_commit:-<missing>} differs from RELEASE.txt $commit" >&2; exit 1; }
+    line="parent=$commit"
+    for service in backend frontend; do
+      key="$(echo "$service" | tr '[:lower:]' '[:upper:]')_IMAGE_ID"
+      want=$(field "$record" "$key")
+      [[ "$want" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "RELEASE.txt $key is not an image ID: ${want:-<missing>}" >&2; exit 1; }
+      manifest_id=$(field "$manifest" "$key")
+      [ "$manifest_id" = "$want" ] || { echo "image manifest $key ${manifest_id:-<missing>} differs from RELEASE.txt $want" >&2; exit 1; }
+      name="ai-platform-$service"
+      running_id=$(docker inspect "$name" --format '{{.Image}}' 2>/dev/null || true)
+      health=$(docker inspect "$name" --format '{{.State.Health.Status}}' 2>/dev/null || true)
+      running=$(docker inspect "$name" --format '{{.State.Running}}' 2>/dev/null || true)
+      paused=$(docker inspect "$name" --format '{{.State.Paused}}' 2>/dev/null || true)
+      restarting=$(docker inspect "$name" --format '{{.State.Restarting}}' 2>/dev/null || true)
+      if [ "$running_id" != "$want" ] || [ "$health" != healthy ] || [ "$running" != true ] || [ "$paused" != false ] || [ "$restarting" != false ]; then
+        echo "$name is not the sealed release: image=${running_id:-<unknown>} sealed=$want health=$health running=$running paused=$paused restarting=$restarting" >&2; exit 1
+      fi
+      line="$line $service=$want"
+    done
+    echo "$line"
+    ;;
   resources)
     min_gib="${2:?minimum free GiB required}"
     min_mib="${3:?minimum available MiB required}"
@@ -94,5 +127,5 @@ case "${1:-}" in
     if [ -n "$list" ]; then echo "$list"; exit 1; fi
     echo "no untracked build-context files"
     ;;
-  *) echo "usage: $0 runtime SHORT_SHA | resources MIN_GIB MIN_MIB MIN_INODES [LABEL] | arch | image-identity TAG | untracked-context DIR [MOUNTS|-]" >&2; exit 2 ;;
+  *) echo "usage: $0 runtime SHORT_SHA | sealed-parent [RELEASES_ROOT] | resources MIN_GIB MIN_MIB MIN_INODES [LABEL] | arch | image-identity TAG | untracked-context DIR [MOUNTS|-]" >&2; exit 2 ;;
 esac

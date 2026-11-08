@@ -19,7 +19,7 @@ ecosystem.config.js[OV6T]: F:C·PM2配置：ai-platform-auth(backend/src/server.
 manage-services.sh[OV2T]: F:C·PM2服务管理脚本(start/stop/restart/reload/status/logs/build) | R:code:ecosystem.config.js | A:- | S:脚本内$1被写成\$1，case匹配永远失败，实际不可用
 package-lock.json[FV2L]: F:C·根目录package.json的锁文件(ali-oss/axios/colors/mysql2) | R:code:package.json | A:- | S:-
 package.json[FV3T]: F:C·根目录package.json：仅为根目录一次性脚本提供ali-oss/axios/colors/mysql2依赖，无有效scripts，main指向ecosystem.config.js | R:code:ecosystem.config.js,code:backend/package.json | A:- | S:真正的应用依赖在backend/与frontend/各自的package.json
-rebuild.sh[OV7M]: F:C·生产重构部署脚本(--full默认/--restart/--build/--check)：环境检查(磁盘、nginx -t、pm2、MySQL)→NODE_OPTIONS 4G构建前端→pm2 delete all并清日志后pm2 start ecosystem→/health重试10次 | R:code:ecosystem.config.js,code:frontend/vite.config.js,code:backend/src/server.js | A:- | S:不装依赖、不跑迁移(由make deploy/make migrate负责)；会删掉全部PM2进程再重建，后端有秒级不可用；MySQL检查口令取DB_PASSWORD或backend/.env，缺失只告警；路径写死/var/www/ai-platform
+rebuild.sh[OV7M]: F:执行星云环境检查、前端构建、PM2重启与健康探测，可按full/restart/build/check选择阶段 | R:code:ecosystem.config.js,code:frontend/vite.config.js,code:backend/src/server.js | A:--full --restart --build --check | S:不安装依赖或迁移；PM2全部进程删除重建；REBUILD_KEEP_LOGS=1保留旧日志；健康失败仅警告，不能以脚本退出零代替线上健康证明
 run-tests.sh[TQ2T]: F:C·服务器上顺序跑backend npm test与frontend npm test --run并汇总 | R:code:frontend/vitest.config.js | A:- | S:路径写死/var/www/ai-platform
 update-db-snapshot.sh[OV2T]: F:C·mysqldump导出ai_platform全量快照并统计用户/对话/消息数，root口令取环境变量MYSQL_ROOT_PASSWORD | R:code:docker/scripts/migrate-data.sh | A:- | S:未设MYSQL_ROOT_PASSWORD即退出；输出路径写死服务器目录
 
@@ -50,7 +50,7 @@ package.json[FV6T]: F:C·后端包清单与脚本：Express4/mysql2/redis4/knex/
 20261106_002_video_teacher_review.js[PD8T]: F:增补视频私有审核状态与审计表，既有公开视频转入待审并以数据库约束阻止未经教师许可公开 | R:code:backend/src/services/videoSafetyService.js,code:backend/src/models/VideoGeneration.js | A:Knex up/down | S:历史作品不自动通过；CHECK同时保护旧客户端发布入口，审核人必须非作者；回滚应用仍保留安全状态和审计
 
 ===/home/hanying/ai-platform/backend/scripts/===
-db_backup.sh[OR5T]: F:C·生产机数据库备份脚本：只从backend/.env安全解析连接信息，mysqldump --single-transaction --routines --triggers 压缩到/var/backups/ai-platform/mysql并生成.sha256，保留KEEP份 | R:- | A:- | S:stdout只输出.sql.gz路径供dev/db-pull与deploy备份门消费；localhost强制改127.0.0.1走TCP；--no-tablespaces免PROCESS权限
+db_backup.sh[OR5T]: F:从应用配置安全取连接信息，将生产MySQL单事务导出压缩、校验并保存摘要 | R:- | A:APP_DIR DB BACKUP_DIR KEEP BACKUP_RETENTION | S:stdout仅备份路径；配置不执行；默认保留14份，BACKUP_RETENTION=skip只新增不清旧备份
 identity-enroll.cjs[OI6T]: F:A·Identity Enrollment消费者CLI：prepare/send/resume/status/record-receipt/import-secret六命令驱动部署实例登记与凭据落盘 | R:code:backend/src/services/auth/IdentityEnrollmentContract.js,code:backend/src/services/auth/IdentityEnrollmentState.js,code:backend/src/services/auth/IdentityEnrollmentClient.js | A:- | S:仅Linux root且umask 077；凭据只从0400/0600文件读，stdout只输出安全摘要；异常保留现场不重试，非ENROLLMENT_错误码归一为LOCAL_IO_FAILED
 ai-lab-smoke.cjs[TB4L]: F:N·ai-lab冒烟脚本：自起server到:4000，建临时用户，经真实HTTP走完首期69项、第二批75项、第三批约90项与class_keys部分类别导入共245项检查后清理 | R:code:backend/src/routes/aiLabRoutes.js,code:backend/src/services/aiLab/AiLabPresetService.js | A:- | S:需本地库可写；缺预置包时自生成临时包并清理；结束删除ailab_smoke_%用户及上传目录
 doc-template-smoke.cjs[TB4S]: F:T·公文模板冒烟脚本：复用或自起:4000，建三名临时用户，用手写OOXML样板经真实HTTP走完上传/猜角色/改角色/共享权限/生成docx/预览/草稿提取/下载/删除共37项后清理 | R:code:backend/src/routes/docTemplateRoutes.js,code:backend/src/__tests__/helpers/docxFixture.js | A:- | S:需本地库可写；"其他组"用户不挂组(组到期会拒登录)；结束删除doctpl_smoke_%用户

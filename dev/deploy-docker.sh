@@ -14,6 +14,7 @@
 #       make deploy-docker ARGS=--allow-ahead   （允许 pkuailab 先于 xingyuncl 发布，不推荐）
 #       make deploy-docker ARGS=--rebuild  （服务器已在同一提交时仍重新构建/加载并切换）
 #       make deploy-docker ARGS=--prebuilt=/home/you/ai-platform-images/v-<短sha>-<时间戳>  （加载 make build-images 的镜像包，不在站点构建）
+#       make deploy-docker ARGS="--prebuilt=<包目录> --code-only"  （纯代码发布：不跑 knex、容器启动不跑 SQL 迁移脚本、不清理旧镜像和旧库备份；其余门不变，见 dev/RELEASE.md 第七节）
 # 环境变量: DOCKER_SSH_HOST=pkuailab  DOCKER_REMOTE_DIR=/var/www/ai-platform  DOCKER_HEALTH_URL=https://ai.pkuailab.com/health
 #           PM2_SSH_HOST=practice（用来核对 ai.xingyuncl.com 已发布的提交）
 #           DOCKER_MIN_FREE_GIB=8 DOCKER_MIN_AVAILABLE_MIB=5120 DOCKER_MIN_FREE_INODES=100000（现场构建的门）
@@ -40,16 +41,22 @@ LOCK_DIR="/var/backups/ai-platform/releases/.lock"
 for v in "$PREBUILT_DISK_MARGIN_GIB" "$PREBUILT_MIN_AVAILABLE_MIB"; do
   [[ "$v" =~ ^[0-9]+$ ]] || { echo "❌ DOCKER_PREBUILT_* 阈值必须是非负整数（当前: $v）"; exit 1; }
 done
-ASSUME_YES=0; ALLOW_AHEAD=0; REBUILD=0; PKG_DIR=""; MODE=build
+ASSUME_YES=0; ALLOW_AHEAD=0; REBUILD=0; PKG_DIR=""; MODE=build; CODE_ONLY=0
+# 纯代码发布不许包含的路径：会碰库、或会改容器启动方式的文件。
+CODE_ONLY_FORBIDDEN='^(backend/migrations/|backend/knexfile\.js$|database/|tools/database-upgrade/|docker/|docker-compose\.yml$)'
 for a in "$@"; do
   case "$a" in
     -y) ASSUME_YES=1 ;;
     --allow-ahead) ALLOW_AHEAD=1 ;;
     --rebuild) REBUILD=1 ;;
     --prebuilt=*) PKG_DIR="${a#--prebuilt=}"; MODE=prebuilt ;;
+    --code-only) CODE_ONLY=1 ;;
     *) echo "未知参数: $a"; exit 1 ;;
   esac
 done
+if [ "$CODE_ONLY" = 1 ] && [ "$MODE" != prebuilt ]; then
+  echo "❌ --code-only 只能和 --prebuilt=<包目录> 一起用（Docker 站点的发布路线是预构建镜像）"; exit 1
+fi
 SSH="ssh -o BatchMode=yes -o ConnectTimeout=20 $SSH_HOST"
 PREFLIGHT="$ROOT/dev/docker-release-preflight.sh"
 LOCKSH="$ROOT/dev/docker-release-lock.sh"
@@ -133,6 +140,23 @@ fi
 if ! git cat-file -e "$REMOTE_SHA" 2>/dev/null || ! git merge-base --is-ancestor "$REMOTE_SHA" "$LOCAL_SHA"; then
   echo "❌ 服务器提交 ${REMOTE_SHA:0:7} 不是本地 HEAD 的祖先（服务器分叉或本地不认识它），中止。"; exit 1
 fi
+# 纯代码发布的前提，在拿锁和传任何东西之前核完。差量基准是"正在运行的封存父版"，不是服务器 Git HEAD：
+# Git HEAD 不代表运行中的镜像，传码后中断再重跑时它已经等于目标提交，拿它算差量永远是空的。
+PARENT_SHA=""; PARENT_IDENTITY=""
+if [ "$CODE_ONLY" = 1 ]; then
+  if ! PARENT_LINE=$($SSH bash -s -- sealed-parent < "$PREFLIGHT" 2>&1); then
+    echo "❌ --code-only 要求运行中的版本就是发布记录封存的父版，当前不成立，中止："; echo "$PARENT_LINE" | sed 's/^/    /'; exit 1
+  fi
+  PARENT_IDENTITY=$(grep -m1 '^parent=' <<<"$PARENT_LINE" || true)
+  PARENT_SHA=$(sed -n 's/^parent=\([0-9a-f]\{40\}\) .*/\1/p' <<<"$PARENT_IDENTITY")
+  if [ -z "$PARENT_SHA" ] || ! git cat-file -e "$PARENT_SHA" 2>/dev/null || ! git merge-base --is-ancestor "$PARENT_SHA" "$LOCAL_SHA"; then
+    echo "❌ 封存父版（${PARENT_LINE}）读不出来或不是本地 HEAD 的祖先，中止。"; exit 1
+  fi
+  NOT_CODE=$(git --no-pager diff --no-renames --name-only "$PARENT_SHA" "$LOCAL_SHA" | grep -E "$CODE_ONLY_FORBIDDEN" || true)
+  if [ -n "$NOT_CODE" ]; then
+    echo "❌ --code-only 只发纯代码。父版 ${PARENT_SHA:0:7} 到本提交之间有这些会碰库或改启动方式的文件，请走常规发布："; echo "$NOT_CODE" | sed 's/^/    /'; exit 1
+  fi
+fi
 REMOTE_PLATFORM=""
 if [ "$MODE" = prebuilt ]; then
   REMOTE_PLATFORM=$($SSH bash -s -- arch < "$PREFLIGHT" 2>/dev/null || echo unknown)
@@ -168,6 +192,15 @@ if [ "$MODE" = prebuilt ]; then
 else
   echo "  镜像来源:    服务器现场 docker compose build（资源门 ≥ ${GATE_FREE_GIB} GiB、≥ ${GATE_AVAILABLE_MIB} MiB、≥ ${MIN_FREE_INODES} inode）"
 fi
+if [ "$CODE_ONLY" = 1 ]; then
+  echo "  发布方式:    纯代码（--code-only）：不跑 knex；容器启动不跑 SQL 迁移脚本；不清理旧镜像和旧库备份"
+  echo "               照旧保留：确认、发布锁、资源门、包与镜像核验、发布前库备份、回退标签、健康检查"
+  echo "  封存父版:    ${PARENT_SHA:0:7}（运行镜像 = 发布记录 = 镜像清单）；到本提交的差量不含迁移与启动文件"
+  echo "  确认后会做:  拿发布锁 → 再核封存父版 → 传码传包 → 加载并核镜像 → 备份一份库 → 切换容器（服务短暂不可用）→ 健康检查 → 打 deploy-docker 标签并推送 GitHub"
+else
+  # 常规发布的行为不变；这一行只是让确认的人看清，避免把纯代码发布误走成这条路线。
+  echo "  发布方式:    常规：切换前跑 knex 迁移；容器启动跑 SQL 迁移脚本；切换成功后清理旧镜像和旧库备份"
+fi
 echo "=============================================================="
 if [ "$ASSUME_YES" != 1 ]; then
   read -rp "确认发布到 ${SITE_ORIGIN#https://}? [y/N] " ans
@@ -183,6 +216,19 @@ if ! $SSH bash -s -- acquire "$LOCK_DIR" "$LOCK_TOKEN" < "$LOCKSH"; then
   echo "❌ 拿不到发布锁 $LOCK_DIR：有别的发布在跑或上次发布中断留下了锁。核实没有发布在跑（docker ps、看锁里的 owner）后再手工 rmdir，脚本不抢锁。"; exit 1
 fi
 LOCK_HELD=1
+
+# 差量是按确认前读到的父版审的；等确认和排队拿锁期间它可能变了。拿到锁后、任何传码传包之前再读一次，
+# 完整提交和两个镜像身份都要一字不差，否则这次核过的范围不再成立。
+if [ "$CODE_ONLY" = 1 ]; then
+  # 先留住完整输出和退出码，成功才解析：身份行打印完 ssh 才断，这次读取同样不算数。
+  LOCKED_RC=0; LOCKED_LINE=$($SSH bash -s -- sealed-parent < "$PREFLIGHT" 2>&1) || LOCKED_RC=$?
+  LOCKED_IDENTITY=""
+  if [ "$LOCKED_RC" = 0 ]; then LOCKED_IDENTITY=$(grep -m1 '^parent=' <<<"$LOCKED_LINE" || true); fi
+  if [ "$LOCKED_RC" != 0 ] || [ "$LOCKED_IDENTITY" != "$PARENT_IDENTITY" ]; then
+    echo "❌ 拿到发布锁后封存父版变了或读不到（退出码 $LOCKED_RC），中止；没有传码、没有传包。请重新核父版后再发。"
+    echo "    确认时: $PARENT_IDENTITY"; echo "    现在:   ${LOCKED_IDENTITY:-<读不到>}"; exit 1
+  fi
+fi
 
 # 代码传输和任何服务器写入前，先以本地候选检查远端可用资源。
 $SSH bash -s -- resources "$GATE_FREE_GIB" "$GATE_AVAILABLE_MIB" "$MIN_FREE_INODES" "$GATE_LABEL" < "$PREFLIGHT"
@@ -203,6 +249,10 @@ if [ "$MODE" = prebuilt ]; then
   if $SSH "cd '$REMOTE_PKG_DIR' 2>/dev/null && echo '$TAR_SHA256  images.tar.gz' | sha256sum -c --status"; then
     echo "==> 服务器上已有摘要一致的 $REMOTE_PKG_DIR/images.tar.gz，复用，不再传"
   else
+    # 纯代码发布不扩大删除范围：任务目录里已有摘要不符的包，说不清是什么，不覆盖。
+    if [ "$CODE_ONLY" = 1 ] && $SSH "test -e '$REMOTE_PKG_DIR/images.tar.gz'"; then
+      echo "❌ $SSH_HOST:$REMOTE_PKG_DIR 里已有摘要不符的 images.tar.gz，--code-only 不覆盖也不删除，中止。请由人核实后处理。"; exit 1
+    fi
     echo "==> 传镜像包（$(( TAR_SIZE / 1048576 )) MiB）到 $SSH_HOST:$REMOTE_PKG_DIR/images.tar.gz.part ..."
     $SSH "mkdir -p '$REMOTE_PKG_DIR' && rm -f '$REMOTE_PKG_DIR/images.tar.gz.part' '$REMOTE_PKG_DIR/images.tar.gz'"
     scp -q -o BatchMode=yes "$PKG_DIR/images.tar.gz" "$SSH_HOST:$REMOTE_PKG_DIR/images.tar.gz.part"
@@ -218,12 +268,13 @@ fi
 # ---------- 3–5. 服务器上构建或加载、备份、迁移、切换、清理 ----------
 echo "==> 服务器$([ "$MODE" = prebuilt ] && echo 加载镜像 || echo 构建镜像)并切换 ..."
 REMOTE_LOG="$(mktemp)"
-$SSH bash -s "$REMOTE_DIR" "$LOCAL_SHORT" "$KEEP_RELEASES" "$GATE_FREE_GIB" "$GATE_AVAILABLE_MIB" "$MIN_FREE_INODES" "$KEEP_DB_BACKUPS" "$MODE" "$LOCK_DIR" "$LOCK_TOKEN" "$REMOTE_PKG_DIR" "$TASK" "$TAR_SHA256" "$BACKEND_IMAGE_ID" "$FRONTEND_IMAGE_ID" "$IMAGE_PLATFORM" <<'REMOTE' | tee "$REMOTE_LOG"
+$SSH bash -s "$REMOTE_DIR" "$LOCAL_SHORT" "$KEEP_RELEASES" "$GATE_FREE_GIB" "$GATE_AVAILABLE_MIB" "$MIN_FREE_INODES" "$KEEP_DB_BACKUPS" "$MODE" "$LOCK_DIR" "$LOCK_TOKEN" "$REMOTE_PKG_DIR" "$TASK" "$TAR_SHA256" "$BACKEND_IMAGE_ID" "$FRONTEND_IMAGE_ID" "$IMAGE_PLATFORM" "$CODE_ONLY" <<'REMOTE' | tee "$REMOTE_LOG"
 set -euo pipefail
 REMOTE_DIR="$1"; SHORT="$2"; KEEP="$3"
 MIN_FREE_GIB="$4"; MIN_AVAILABLE_MIB="$5"; MIN_FREE_INODES="$6"; KEEP_DB="${7:-7}"
 MODE="${8:-build}"; LOCK_DIR="${9:-}"; LOCK_TOKEN="${10:-}"
 PKG_DIR="${11:-}"; PKG_TASK="${12:-}"; PKG_SHA="${13:-}"; PKG_BACKEND_ID="${14:-}"; PKG_FRONTEND_ID="${15:-}"; PKG_PLATFORM="${16:-}"
+CODE_ONLY="${17:-0}"
 cd "$REMOTE_DIR"
 # 无论成败，退出时释放发布锁（只释放自己这把）。
 if [ -n "$LOCK_DIR" ] && [ -n "$LOCK_TOKEN" ]; then
@@ -271,6 +322,14 @@ if [ "$MODE" = prebuilt ]; then
     echo "❌ 镜像核验失败：已删除刚加载的两个标签；没有备份、没有迁移、没有切换；这条路径不会在服务器上构建。包保留在 $PKG_DIR 供排查。"; exit 1
   fi
   echo "    镜像核验通过（只表示镜像已在服务器本地，业务尚未切换）"
+  if [ "$CODE_ONLY" = 1 ]; then
+    # 下面要替换的 CMD 必须就是这一份，否则"只留后半段"不成立；镜像改过启动方式就不是纯代码发布。
+    IMAGE_CMD=$(docker image inspect "ai-platform-backend:$TAG" --format '{{json .Config.Cmd}}' 2>/dev/null || true)
+    if [ "$IMAGE_CMD" != '["/bin/sh","-c","/usr/local/bin/run-migrations.sh && su-exec nodejs node src/server.js"]' ]; then
+      docker rmi "ai-platform-backend:$TAG" "ai-platform-frontend:$TAG" >/dev/null 2>&1 || true
+      echo "❌ 目标镜像的 CMD 不是预期（${IMAGE_CMD:-<读不到>}），--code-only 不适用：已删除刚加载的两个标签；没有备份、没有切换。"; exit 1
+    fi
+  fi
 else
   echo "    docker compose build backend（日志 $REL/build.log）..."
   if ! docker compose build backend </dev/null > "$REL/build.log" 2>&1; then
@@ -304,6 +363,14 @@ services:
     image: ai-platform-frontend:rollback-${TS}
 YML
 fi
+# 纯代码发布：镜像 CMD 是 "run-migrations.sh && su-exec nodejs node src/server.js"，这里只留后半段，容器启动就不连库跑 SQL 迁移脚本。
+# 只写在这两个发布文件里、镜像字节不变；下一次常规发布的 override 没有这一行，自然回到镜像自己的 CMD。
+CODE_ONLY_COMMAND='["su-exec", "nodejs", "node", "src/server.js"]'
+if [ "$CODE_ONLY" = 1 ]; then
+  for f in "$REL/release.override.yml" "$REL/rollback.override.yml"; do
+    if [ -f "$f" ]; then sed -i "/^    image: ai-platform-backend:/a\\    command: $CODE_ONLY_COMMAND" "$f"; fi
+  done
+fi
 {
   echo "TASK_ID=deploy-docker"
   echo "RELEASE_TIME=$TS"
@@ -312,6 +379,7 @@ fi
   echo "PREVIOUS_FRONTEND_TAG=$OLD_F"
   echo "CANDIDATE_TAG=$TAG"
   echo "ROLLBACK_TAG=rollback-$TS"
+  if [ "$CODE_ONLY" = 1 ]; then echo "RELEASE_KIND=code-only"; fi
   if [ "$MODE" = prebuilt ]; then
     echo "IMAGES_SOURCE=prebuilt"
     echo "IMAGE_PACKAGE=$PKG_DIR/images.tar.gz"
@@ -333,10 +401,15 @@ docker exec ai-platform-mysql sh -c 'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWOR
 [ -s "$BK" ] || { echo "❌ 备份为空，中止"; exit 1; }
 echo "    备份: $BK ($(du -h "$BK" | cut -f1))"; echo "DB_BACKUP=$BK" >> "$REL/RELEASE.txt"
 
-echo "    用新镜像执行 knex 迁移（切换前）..."
-# 注意：本段脚本经 stdin 喂给远端 bash -s，任何会读 stdin 的命令都必须 </dev/null，否则会把脚本剩余部分吃掉
-docker compose -f docker-compose.yml -f "$REL/release.override.yml" run --rm --no-deps -T backend npx knex migrate:latest </dev/null 2>&1 | grep -vE '^$|Using environment|attribute .version. is obsolete' | sed 's/^/      /' || { echo "❌ 迁移失败，容器未切换；库已备份到 $BK"; exit 1; }
-echo "DB_MIGRATED=1" >> "$REL/RELEASE.txt"
+if [ "$CODE_ONLY" = 1 ]; then
+  echo "    纯代码发布：不执行 knex 迁移"
+  echo "DB_MIGRATED=skipped-code-only" >> "$REL/RELEASE.txt"
+else
+  echo "    用新镜像执行 knex 迁移（切换前）..."
+  # 注意：本段脚本经 stdin 喂给远端 bash -s，任何会读 stdin 的命令都必须 </dev/null，否则会把脚本剩余部分吃掉
+  docker compose -f docker-compose.yml -f "$REL/release.override.yml" run --rm --no-deps -T backend npx knex migrate:latest </dev/null 2>&1 | grep -vE '^$|Using environment|attribute .version. is obsolete' | sed 's/^/      /' || { echo "❌ 迁移失败，容器未切换；库已备份到 $BK"; exit 1; }
+  echo "DB_MIGRATED=1" >> "$REL/RELEASE.txt"
+fi
 
 echo "    切换容器 ..."
 docker compose -f docker-compose.yml -f "$REL/release.override.yml" up -d backend frontend </dev/null >/dev/null 2>&1
@@ -352,39 +425,70 @@ if [ "$RUNTIME_STATUS" != CURRENT ]; then
   docker logs --tail 40 ai-platform-backend 2>&1 | cut -c1-160; exit 1
 fi
 L=$(docker logs ai-platform-backend 2>&1 || true)
-echo "    启动脚本 SQL 迁移：执行 $(echo "$L" | grep -c '^执行迁移' || true) 跳过 $(echo "$L" | grep -c '跳过已执行' || true) 失败 $(echo "$L" | grep -c '执行失败' || true)"
+if [ "$CODE_ONLY" = 1 ]; then
+  # 切换后再核一次：新容器的 CMD 确实被替换，且日志里没有启动脚本的第一行；不符就不算发布成功。
+  ACTUAL_CMD=$(docker inspect ai-platform-backend --format '{{json .Config.Cmd}}' 2>/dev/null || true)
+  if [ "$ACTUAL_CMD" != '["su-exec","nodejs","node","src/server.js"]' ] || grep -q '检查数据库迁移' <<<"$L"; then
+    echo "❌ 纯代码发布的后端不符合预期（CMD=${ACTUAL_CMD:-<读不到>}，或日志显示启动迁移脚本运行过）。回滚命令："
+    echo "   docker compose -f $REMOTE_DIR/docker-compose.yml -f $REL/rollback.override.yml up -d backend frontend"
+    exit 1
+  fi
+  echo "    启动脚本 SQL 迁移：未运行（CMD=$ACTUAL_CMD）"
+  echo "STARTUP_MIGRATIONS=skipped-code-only" >> "$REL/RELEASE.txt"
+else
+  echo "    启动脚本 SQL 迁移：执行 $(echo "$L" | grep -c '^执行迁移' || true) 跳过 $(echo "$L" | grep -c '跳过已执行' || true) 失败 $(echo "$L" | grep -c '执行失败' || true)"
+fi
 docker ps --format '    {{.Names}}  {{.Image}}  {{.Status}}' | grep ai-platform
 echo "REMOTE_HEALTHY=1" >> "$REL/RELEASE.txt"
 echo "FINAL_STATUS=RELEASED" >> "$REL/RELEASE.txt"
 
-echo "    清理旧镜像（每个仓库保留最近 $KEEP 个发布及其 rollback；正在运行的镜像永远不删）..."
-# 标签形如 v-<sha>-<YYYYmmdd_HHMMSS> / rollback-<YYYYmmdd_HHMMSS>：按末尾 15 位完整时间戳倒序才是按时间。
-# 以前按 "_" 后的时分秒排序，把当天凌晨发布的当成最旧删掉了，连正在跑的容器的标签都被清掉
-RUN_IDS="$(docker inspect ai-platform-backend ai-platform-frontend --format '{{.Image}}' 2>/dev/null || true)"
-for repo in ai-platform-backend ai-platform-frontend; do
-  for pat in '^v-' '^rollback-'; do
-    # 某个仓库还没有任何 v-/rollback- 标签时 grep 返回 1，pipefail 会让整段在切换成功之后才中止；清理阶段找不到可删的不算失败。
-    docker images --format '{{.Tag}}' "$repo" | { grep -E "$pat" || true; } | awk '{ print substr($0, length($0) - 14) "\t" $0 }' | sort -r | cut -f2 | tail -n +$((KEEP + 1)) | while read -r t; do
-      id=$(docker image inspect "$repo:$t" --format '{{.Id}}' 2>/dev/null || true)
-      [ -n "$id" ] && echo "$RUN_IDS" | grep -q "$id" && continue
-      docker rmi "$repo:$t" >/dev/null 2>&1 || true
+if [ "$CODE_ONLY" = 1 ]; then
+  # 只跳过清理，不改保留份数：下一次常规发布照常按 KEEP/KEEP_DB 收回。
+  echo "    纯代码发布：不清理旧镜像、不清理旧库备份"
+  echo "RETENTION_CLEANUP=skipped-code-only" >> "$REL/RELEASE.txt"
+else
+  echo "    清理旧镜像（每个仓库保留最近 $KEEP 个发布及其 rollback；正在运行的镜像永远不删）..."
+  # 标签形如 v-<sha>-<YYYYmmdd_HHMMSS> / rollback-<YYYYmmdd_HHMMSS>：按末尾 15 位完整时间戳倒序才是按时间。
+  # 以前按 "_" 后的时分秒排序，把当天凌晨发布的当成最旧删掉了，连正在跑的容器的标签都被清掉
+  RUN_IDS="$(docker inspect ai-platform-backend ai-platform-frontend --format '{{.Image}}' 2>/dev/null || true)"
+  for repo in ai-platform-backend ai-platform-frontend; do
+    for pat in '^v-' '^rollback-'; do
+      # 某个仓库还没有任何 v-/rollback- 标签时 grep 返回 1，pipefail 会让整段在切换成功之后才中止；清理阶段找不到可删的不算失败。
+      docker images --format '{{.Tag}}' "$repo" | { grep -E "$pat" || true; } | awk '{ print substr($0, length($0) - 14) "\t" $0 }' | sort -r | cut -f2 | tail -n +$((KEEP + 1)) | while read -r t; do
+        id=$(docker image inspect "$repo:$t" --format '{{.Id}}' 2>/dev/null || true)
+        [ -n "$id" ] && echo "$RUN_IDS" | grep -q "$id" && continue
+        docker rmi "$repo:$t" >/dev/null 2>&1 || true
+      done
     done
   done
-done
-echo "    清理旧库备份（只保留最近 $KEEP_DB 份；本次发布前的备份最新，一定保留）..."
-# 只在切换成功后执行，失败的发布不删任何备份。名字形如 ai_platform-<YYYYmmdd_HHMMSS>.sql.gz（本脚本与
-# make migrate-docker 都这样命名），按名字倒序就是按时间倒序；不符合这个形式的文件一律不碰。
-# 2026-10-03 北大就是因为备份攒到 22 份（6.7G）把磁盘挤到资源门以下，前端构建前被拦停。
-if [[ "$KEEP_DB" =~ ^[1-9][0-9]*$ ]]; then
-  mapfile -t BACKUPS < <(ls -1 /var/backups/ai-platform/mysql/ 2>/dev/null | grep -E '^ai_platform-[0-9]{8}_[0-9]{6}\.sql\.gz$' | sort -r || true)
-  for f in "${BACKUPS[@]:$KEEP_DB}"; do
-    rm -f -- "/var/backups/ai-platform/mysql/$f" 2>/dev/null && echo "      删除 $f" || echo "      ⚠ 无法删除 $f"
-  done
-else
-  echo "    ⚠ 备份保留份数无效（$KEEP_DB），本次不清理旧备份"
+  echo "    清理旧库备份（只保留最近 $KEEP_DB 份；本次发布前的备份最新，一定保留）..."
+  # 只在切换成功后执行，失败的发布不删任何备份。名字形如 ai_platform-<YYYYmmdd_HHMMSS>.sql.gz（本脚本与
+  # make migrate-docker 都这样命名），按名字倒序就是按时间倒序；不符合这个形式的文件一律不碰。
+  # 2026-10-03 北大就是因为备份攒到 22 份（6.7G）把磁盘挤到资源门以下，前端构建前被拦停。
+  if [[ "$KEEP_DB" =~ ^[1-9][0-9]*$ ]]; then
+    mapfile -t BACKUPS < <(ls -1 /var/backups/ai-platform/mysql/ 2>/dev/null | grep -E '^ai_platform-[0-9]{8}_[0-9]{6}\.sql\.gz$' | sort -r || true)
+    for f in "${BACKUPS[@]:$KEEP_DB}"; do
+      rm -f -- "/var/backups/ai-platform/mysql/$f" 2>/dev/null && echo "      删除 $f" || echo "      ⚠ 无法删除 $f"
+    done
+  else
+    echo "    ⚠ 备份保留份数无效（$KEEP_DB），本次不清理旧备份"
+  fi
 fi
 if [ "$MODE" = prebuilt ] && [ -n "$PKG_DIR" ]; then
-  rm -rf -- "$PKG_DIR" && echo "    已删除服务器上的镜像包 $PKG_DIR（清单已留在发布目录）"
+  if [ "$CODE_ONLY" = 1 ]; then
+    # 只删本次核过的两个文件：包摘要等于本次发布的包（本机留有同摘要副本），清单与发布目录里的副本相同。
+    # 目录里别的东西不是本次的，一律不碰；目录空了才去掉。摘要变了就全部留下。
+    if ( cd "$PKG_DIR" && echo "$PKG_SHA  images.tar.gz" | sha256sum -c --status ) && cmp -s "$PKG_DIR/MANIFEST.env" "$REL/IMAGE-MANIFEST.env"; then
+      rm -f -- "$PKG_DIR/images.tar.gz" "$PKG_DIR/MANIFEST.env"
+      if rmdir -- "$PKG_DIR" 2>/dev/null; then echo "    已删除本次上传的镜像包 $PKG_DIR（清单已留在发布目录）"; else echo "    已删除本次上传的两个文件；$PKG_DIR 里还有别的文件，保留"; fi
+      echo "STAGED_PACKAGE=removed-own-files" >> "$REL/RELEASE.txt"
+    else
+      echo "    ⚠ $PKG_DIR 里的包或清单与本次核过的不一致，全部保留，请由人核实"
+      echo "STAGED_PACKAGE=retained-not-verified" >> "$REL/RELEASE.txt"
+    fi
+  else
+    rm -rf -- "$PKG_DIR" && echo "    已删除服务器上的镜像包 $PKG_DIR（清单已留在发布目录）"
+  fi
 fi
 echo "    磁盘: $(df -h / | tail -1 | awk '{print $5" 已用，剩 "$4}')"
 echo "    发布目录: $REL"

@@ -6,6 +6,7 @@
 # 用法: make deploy            （显示将部署的提交并二次确认）
 #       make deploy ARGS=-y    （跳过确认，仅用于自动化）
 #       make deploy ARGS=--server-first （首站构建/健康通过后再推 GitHub，使用 bundle 传码）
+#       make deploy ARGS="--server-first --code-only" （纯代码发布：差量含迁移或启动文件即拒绝；备份门只新增备份、不删旧备份）
 # 环境变量: SSH_HOST=practice  REMOTE_DIR=/var/www/ai-platform  HEALTH_URL=https://ai.xingyuncl.com/health
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,11 +14,14 @@ SSH_HOST="${SSH_HOST:-practice}"
 REMOTE_DIR="${REMOTE_DIR:-/var/www/ai-platform}"
 HEALTH_URL="${HEALTH_URL:-https://ai.xingyuncl.com/health}"
 BRANCH="$(git -C "$ROOT" branch --show-current)"
-ASSUME_YES=0; SERVER_FIRST=0
+ASSUME_YES=0; SERVER_FIRST=0; CODE_ONLY=0
+# 纯代码发布不许包含的路径：会碰库、或会改容器启动方式的文件（与 dev/deploy-docker.sh 同一份清单）。
+CODE_ONLY_FORBIDDEN='^(backend/migrations/|backend/knexfile\.js$|database/|tools/database-upgrade/|docker/|docker-compose\.yml$)'
 for arg in "$@"; do
   case "$arg" in
     -y) ASSUME_YES=1 ;;
     --server-first) SERVER_FIRST=1 ;;
+    --code-only) CODE_ONLY=1 ;;
     *) echo "未知参数: $arg"; exit 1 ;;
   esac
 done
@@ -49,6 +53,12 @@ fi
 LOCAL_SHA=$(git rev-parse --short HEAD)
 REMOTE_SHA=$(ssh -n -o BatchMode=yes "$SSH_HOST" "cd $REMOTE_DIR && git rev-parse --short HEAD")
 git merge-base --is-ancestor "$REMOTE_SHA" HEAD || { echo "❌ 首站提交不是本地 HEAD 的祖先，中止。"; exit 1; }
+if [ "$CODE_ONLY" = 1 ]; then
+  NOT_CODE=$(git --no-pager diff --no-renames --name-only "$REMOTE_SHA" "$LOCAL_SHA" | grep -E "$CODE_ONLY_FORBIDDEN" || true)
+  if [ -n "$NOT_CODE" ]; then
+    echo "❌ --code-only 只发纯代码。首站 $REMOTE_SHA 到本提交之间有这些会碰库或改启动方式的文件，请走常规发布："; echo "$NOT_CODE" | sed 's/^/    /'; exit 1
+  fi
+fi
 echo ""
 echo "================ 部署预览 ================"
 echo "  服务器当前:  $REMOTE_SHA"
@@ -60,6 +70,14 @@ git --no-pager diff --stat "$REMOTE_SHA..$LOCAL_SHA" 2>/dev/null | tail -1 | sed
 if git --no-pager diff --name-only "$REMOTE_SHA..$LOCAL_SHA" 2>/dev/null | grep -q '^backend/migrations/'; then
   echo "  ⚠ 本次含 knex 迁移文件：rebuild.sh 不跑迁移，发布后按 dev/RELEASE.md 第三节执行 make migrate-status / make migrate"
 fi
+if [ "$CODE_ONLY" = 1 ]; then
+  echo "  发布方式:    纯代码（--code-only）：差量不含迁移与启动文件；备份门只新增备份、不删旧备份；重启不清历史日志"
+  if [ "$SERVER_FIRST" = 1 ]; then
+    echo "  确认后会做:  备份一份库 → 传码并 ff-only 合并 → 构建前端 → 重启 PM2（后端几秒不可用）→ 健康检查通过后推送 GitHub $BRANCH → 打 deploy 标签并推送"
+  else
+    echo "  确认后会做:  备份一份库 → 服务器 ff-only 合并（GitHub $BRANCH 已在预览前推送）→ 构建前端 → 重启 PM2（后端几秒不可用）→ 打 deploy 标签并推送"
+  fi
+fi
 echo "=========================================="
 if [ "$ASSUME_YES" != 1 ]; then
   read -rp "确认部署到生产 ai.xingyuncl.com? [y/N] " ans
@@ -68,7 +86,9 @@ fi
 
 # 3. 备份门：发布前先做一份数据库备份（约 112MB 库，几秒钟）
 echo "==> 发布前数据库备份 ..."
-BK=$(ssh -o BatchMode=yes "$SSH_HOST" "APP_DIR=$REMOTE_DIR bash -s" < "$ROOT/backend/scripts/db_backup.sh")
+BACKUP_ENV="APP_DIR=$REMOTE_DIR"
+if [ "$CODE_ONLY" = 1 ]; then BACKUP_ENV="$BACKUP_ENV BACKUP_RETENTION=skip"; fi
+BK=$(ssh -o BatchMode=yes "$SSH_HOST" "$BACKUP_ENV bash -s" < "$ROOT/backend/scripts/db_backup.sh")
 echo "    备份: $BK"
 
 # 首站优先时只传已提交对象，不同步工作区、配置或上传数据。
@@ -119,6 +139,11 @@ if git diff --name-only $REMOTE_SHA HEAD | grep -qE '^backend/(package(-lock)?\.
 fi
 if git diff --name-only $REMOTE_SHA HEAD | grep -qE '^frontend/(package(-lock)?\.json)$'; then
   echo "==> frontend 依赖有变化，npm ci ..."; ( cd frontend && npm ci --no-audit --no-fund )
+fi
+# 纯代码发布不删历史日志：rebuild.sh 刚随本次提交合入，核一下它认这个开关，不认就不重启。
+if [ "$CODE_ONLY" = 1 ]; then
+  grep -q REBUILD_KEEP_LOGS rebuild.sh || { echo "❌ 服务器上的 rebuild.sh 不支持保留日志，中止；服务没有重启。"; exit 1; }
+  export REBUILD_KEEP_LOGS=1
 fi
 bash rebuild.sh --full
 EOF

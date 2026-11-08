@@ -158,6 +158,20 @@ make deploy-docker
 5. 回退与现场路径相同（`current/rollback.override.yml`，见上）。同一提交的双容器已运行目标镜像且健康时仍直接跳过。Git HEAD 不代表运行中的镜像，判定一律以容器实际镜像 ID 与健康为准。
 6. 工具变更的上线顺序不变：含这些脚本的提交先 `make deploy ARGS=--server-first`（星云 + GitHub），再 `make build-images`，再 `make deploy-docker ARGS=--prebuilt=…`；不用 `--allow-ahead` 跳过顺序检查。构建主机的真实 Docker 能力、镜像仓库可达性与一次生产演练在写下这段时都还没有做过，以 `--precheck` 的实际输出为准。
 
+**纯代码发布（`--code-only`，对应发布类型 A）**：常规路径会无条件跑 knex（第 4 步）、容器启动时跑 SQL 迁移脚本、切换后清理旧镜像和旧库备份（第 6 步）；星云的备份门也按 `KEEP=14` 滚动删除。只改代码的发布可以不碰这些：
+
+```bash
+make deploy ARGS="--server-first --code-only"
+make build-images
+make deploy-docker ARGS="--prebuilt=<包目录> --code-only"
+```
+
+1. **范围门**：差量含 `backend/migrations/`、`backend/knexfile.js`、`database/`、`tools/database-upgrade/`、`docker/`、`docker-compose.yml` 中任一路径即拒绝，改走常规发布。Docker 站点的差量基准是 `docker-release-preflight.sh sealed-parent` 读到的运行中封存父版（`current` 发布记录、镜像清单、两个运行容器必须是同一份且健康），不是服务器 Git HEAD；读不到或对不上就拒绝，这一步在拿锁和传任何东西之前；拿到锁后、传码传包之前再读一次，完整提交和两个镜像 ID 变了就停。`--code-only` 只能配 `--prebuilt`。目标镜像加载后还要核它的 CMD 就是已知那一份，不符就删掉刚加载的两个标签并中止，不备份、不切换。
+2. **不做的事**：不跑 `knex migrate:latest`；容器启动不跑 `run-migrations.sh`（`release.override.yml` 与 `rollback.override.yml` 给 backend 写 `command: ["su-exec", "nodejs", "node", "src/server.js"]`，只替换 CMD、镜像字节不变，切换后核 `Config.Cmd` 与日志，不符即按失败处理并打印回滚命令）；不清理旧镜像和旧库备份；星云备份门带 `BACKUP_RETENTION=skip`，只新增、不删旧备份；星云 `rebuild.sh` 带 `REBUILD_KEEP_LOGS=1`，不清 PM2 与 auth/frontend 的历史日志。保留份数的配置不动，下一次常规发布照常收回。
+3. **照旧保留**：交互确认、站点先后、发布锁、资源门（不因 `--code-only` 放宽）、包与镜像核验、发布前库备份、回退标签与回退文件、健康检查、星云 `rebuild.sh` 的构建与重启。北大只删本次核过摘要的 `images.tar.gz` 与和发布目录副本相同的 `MANIFEST.env`（本机留有同摘要的包），目录空了才去掉，核不上就全部保留；任务目录里已有摘要不符的包时拒绝发布，不覆盖。星云的每日定时备份不走发布脚本，仍按 `KEEP` 滚动。
+4. **记录**：`RELEASE.txt` 多出 `RELEASE_KIND=code-only`、`DB_MIGRATED=skipped-code-only`、`STARTUP_MIGRATIONS=skipped-code-only`、`RETENTION_CLEANUP=skipped-code-only`、`STAGED_PACKAGE=removed-own-files` 或 `retained-not-verified`。
+5. **代价**：不清理意味着这次发布净增磁盘（一份库备份和新镜像层），发布前先看 `make status-docker` 的磁盘行。
+
 其他命令：`make status-docker`（git/容器/健康/磁盘/最近发布）、`make migrate-status-docker`、`make migrate-docker`（单独跑迁移，先备份）、`make logs-docker`、`make rollback-docker`。
 
 **回滚**：`make rollback-docker` 列出最近发布目录，然后在服务器上用当前发布目录里的 `rollback.override.yml` 切回发布前的镜像（`rollback-<时间戳>` 标签）：
@@ -178,6 +192,7 @@ ssh pkuailab 'cd /var/www/ai-platform && docker compose -f docker-compose.yml -f
 
 - 不要为了过资源门去降门槛：门槛只按目标主机实测容量评估后调整，一次门拒即停。预构建路径里不要在北大现场补构建。
 - 不要用 `--allow-ahead` 跳过星云→北大的顺序检查，也不要绕开发布锁。
+- 不要用 `--code-only` 发带迁移或启动改动的提交，也不要把它当成放宽任何门的手段；它只跳过迁移和清理。
 - 不要 `make deploy ARGS=-y` 跳过确认
 - 不要在生产服务器上直接改代码（会导致下次 ff-only 合并失败；`deploy.sh` 会因工作区不干净拒绝）
 - 不要 `git push --force` 到 main
