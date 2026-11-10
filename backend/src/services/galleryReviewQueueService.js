@@ -54,6 +54,20 @@ async function groups(user){
 }
 async function recheck(media,id,user){
   mediaOf(media);id=idOf(id);await reviewer(media).authorize(id,user);
+  // Withdraw before the slow external call. A timeout, process interruption or
+  // configuration change between inspect/save must not leave old approval live.
+  await db.transaction(async query=>{
+    await reviewer(media).authorize(id,user,query,true);
+    const {rows:works}=await query(`SELECT is_public FROM ${media}_generations WHERE id=?`,[id]);
+    if(!Number(works[0].is_public))return;
+    await query(`INSERT IGNORE INTO ${media}_safety (generation_id) VALUES (?)`,[id]);
+    const {rows:states}=await query(`SELECT * FROM ${media}_safety WHERE generation_id=? FOR UPDATE`,[id]);
+    await query(`UPDATE ${media}_generations SET is_public=0,gallery_approved_by=NULL WHERE id=?`,[id]);
+    await query(`UPDATE ${media}_safety SET gallery_state='pending',gallery_reason='Machine recheck in progress; human approval required',revision=revision+1 WHERE generation_id=?`,[id]);
+    await query("UPDATE gallery_machine_reviews SET policy_version='recheck-in-progress' WHERE media=? AND generation_id=?",[media,id]);
+    const audit=media==='image'?require('./imageSafetyService').event:require('./videoSafetyService').event;
+    await audit(query,id,user.id,'machine_recheck_started','pending','Withdrew prior publication before machine recheck',states[0].sha256||null);
+  });
   const machine=require('./galleryMachineReviewService'),inspection=await machine.inspect(media,id,{force:true});
   return db.transaction(async query=>{
     await reviewer(media).authorize(id,user,query,true);
@@ -61,10 +75,14 @@ async function recheck(media,id,user){
     const {rows:states}=await query(`SELECT * FROM ${media}_safety WHERE generation_id=? FOR UPDATE`,[id]);
     if(!states[0])throw safety.error('请先导入作品',409);
     await machine.save(query,media,works[0],states[0],inspection);
-    // A recheck can withdraw unsafe public content, never grant publication.
-    if(inspection.result.decision==='reject'){
+    // Rechecks never grant publication. Uncertainty withdraws an already-public
+    // item into the human queue; a rejection stays private and cannot be approved.
+    if(inspection.result.decision!=='allow'){
+      const next=inspection.result.decision==='reject'?'rejected':'pending';
       await query(`UPDATE ${media}_generations SET is_public=0,gallery_approved_by=NULL WHERE id=?`,[id]);
-      await query(`UPDATE ${media}_safety SET gallery_state='rejected',gallery_reason=?,revision=revision+1 WHERE generation_id=?`,[inspection.result.reasons.map(x=>x.text).join('；').slice(0,500),id]);
+      await query(`UPDATE ${media}_safety SET gallery_state=?,gallery_reason=?,revision=revision+1 WHERE generation_id=?`,[next,inspection.result.reasons.map(x=>x.text).join('；').slice(0,500),id]);
+      const audit=media==='image'?require('./imageSafetyService').event:require('./videoSafetyService').event;
+      await audit(query,id,user.id,'machine_withdrawal',next,'Machine recheck withdrew publication; human review required',states[0].sha256||null);
     }else await query(`UPDATE ${media}_safety SET revision=revision+1 WHERE generation_id=?`,[id]);
     return inspection.result;
   });

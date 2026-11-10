@@ -8,7 +8,7 @@ Practice integration persists these results against the exact work/media digest.
 
 # content-review 0.1.0 — shared candidate library
 
-Independent Node 18+ ES-module library; no dependencies and no platform database or authorization side effects. This is the **shared-library option** in task A, not a deployed HTTP service. EDU (Node) imports it directly; TE (Go) can invoke a small authenticated internal adapter using this same pinned package, without reimplementing policy. That adapter and platform integration remain platform tasks B/C. Do not expose an unauthenticated review endpoint or let clients submit trusted review results.
+Independent Node 18+ ES-module library; no dependencies and no platform database or authorization side effects. This is the **shared-library option** in task A, not a deployed HTTP service. EDU and TE both have Go backends: neither can directly import this Node package. They require a small authenticated server-side adapter using this same pinned package, without reimplementing policy. That adapter and platform integration remain platform tasks B/C. Do not expose an unauthenticated review endpoint or let clients submit trusted review results.
 
 Policy: `docs/审查标准.md`, version `2026-11-10.1`. The delivery document at `D:\TeachingWorkspace\给本人\内容审查标准-20261110\审查标准.md` and this repository copy have identical bytes. `standard-reference.json` records the version/hash for platform consumers. Seven classes are the original six with expanded political scope and a dedicated map class.
 
@@ -57,3 +57,7 @@ The existing local practice configuration `ai_models.id=45` requested `deepseek-
 **Automatic publication remains disabled.** Real image/video/map-pixel accuracy and the U02 failure require further work and independent validation. Do not weaken the existing teacher approval gate because the text thresholds were met.
 
 Evidence (no keys or student data): `/home/hanying/pkuailab-ws/output/content-review-live-20261110/`. Original responses/decisions are retained in `results.json`; `assessment.json` applies the corrected gate to those identical rows. `--supplements` adds the two exact short examples. The dry-run path remains network-free; live invocation still requires explicit approval.
+
+## Evidence binding and rollback correction
+
+`POLICY_SHA256` is SHA-256 of `JSON.stringify(POLICY)` (parsed policy), not the raw JSON file. `standard-reference.json` records both this runtime digest and the separately named `policy_file_sha256`, plus the canonical document digest. Runtime import verifies document/version/policy binding and results include `standardSha256`. Practice also compares the complete configured model identity (IDs, model names, endpoints, credential revision via opaque digest, vision capability, active state, updated_at and explicit config revision) before cache reuse and within approval/save transactions. A policy/model change requires recheck; a failed config lookup cannot grant approval.

@@ -19,6 +19,7 @@ let db, knex, server, storage;
   storage = await fs.mkdtemp(path.join(os.tmpdir(), 'image-safety-test-'));
   process.env.STORAGE_PATH = storage;
   root = await require('mysql2/promise').createConnection({host:'127.0.0.1',port:3307,user:'root',password:process.env.DEV_MYSQL_ROOT_PASSWORD});
+  const [[databaseVersion]]=await root.query('SELECT VERSION() version');console.log('Isolated test MySQL version:',databaseVersion.version);
   await root.query(`CREATE DATABASE ${testDatabase}`);
   knex = require('knex')({ client: 'mysql2', connection: {
     host: '127.0.0.1', port: 3307, user: process.env.DB_USER || 'ai_user', password: process.env.DB_PASSWORD,
@@ -52,12 +53,15 @@ let db, knex, server, storage;
   await require('../../../migrations/20261110_001_gallery_reports_visibility').up(knex);
   await require('../../../migrations/20261110_002_gallery_machine_review').up(knex);
   await require('../../../migrations/20261110_002_gallery_machine_review').up(knex);
+  await require('../../../migrations/20261110_003_gallery_rollback_guard').up(knex);
+  await require('../../../migrations/20261110_003_gallery_rollback_guard').up(knex);
   await knex('image_generations').insert([1, 2, 3].map(id => ({ id, user_id: 7, prompt: 'test', local_path: '/uploads/legacy.jpg' })));
   await knex('image_models').insert({ id: 1, display_name: 'test', provider: 'test' });
   await knex('users').insert([{ id: 7, username: 'student', group_id: 10 }, { id: 9, username: 'teacher', group_id: 10 }, { id: 10, username: 'other teacher', group_id: 11 }]);
   db = require('../../database/connection'); await db.initialize();
   const machine=require('../../services/galleryMachineReviewService');
   const safeModel=async()=>({decision:'allow',confidence:.95,mapDetected:false,scores:{sexual:0,violence:0,disgust:0,discrimination:0,political:0,minors:0,map:0}});
+  const realAdapters=machine.adapters;
   machine.adapters=async()=>({textModel:safeModel,visionModel:safeModel,modelRevision:'isolated-integration-fixture'});
   const safety = require('../../services/imageSafetyService');
   const provider = require('../../services/imageCensorProvider');
@@ -234,6 +238,7 @@ let db, knex, server, storage;
   const before = await safety.get(1);
   await fs.writeFile(safety.assetPath(before.file_key), Buffer.from('tampered'));
   await assert.rejects(safety.asset(1, { id: 9, role: 'super_admin' }, false, true), /校验失败/);
+  await require('./galleryFixes.scenarios.cjs')({assert,knex,db,safety,review,teacher,sharp,machine,ImageGeneration,realAdapters});
   console.log('PASS: migration, quarantine, gallery, authorization, reference ownership, fingerprint deny, duplicate completion, stale review, publish/removal race, audit preview and tamper rejection');
 })().catch(e => { console.error(e.stack); process.exitCode = 1; }).finally(async () => {
   if (server) await new Promise(resolve => server.close(resolve));

@@ -1,6 +1,6 @@
 /** Store seven-category machine evidence separately from human decisions.
  * Additive only; existing works are not published, hidden or deleted. Retry-safe.
- * Application rollback retains evidence, never automatically changes visibility.
+ * Application rollback requires migration 003 persistent publication freeze first.
  */
 exports.up=async knex=>{
   if(!await knex.schema.hasTable('gallery_machine_reviews'))await knex.schema.createTable('gallery_machine_reviews',t=>{

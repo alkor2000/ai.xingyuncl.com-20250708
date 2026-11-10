@@ -2,6 +2,10 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 const freeze = x => { if (x && typeof x === 'object') { Object.values(x).forEach(freeze); Object.freeze(x); } return x; };
 export const POLICY = freeze(JSON.parse(readFileSync(new URL('./policy.json', import.meta.url), 'utf8')));
+export const POLICY_SHA256 = createHash('sha256').update(JSON.stringify(POLICY)).digest('hex');
+const reference=JSON.parse(readFileSync(new URL('./standard-reference.json',import.meta.url),'utf8'));
+export const STANDARD_SHA256=createHash('sha256').update(readFileSync(new URL('./docs/审查标准.md',import.meta.url))).digest('hex');
+if(reference.version!==POLICY.version||reference.sha256!==STANDARD_SHA256||reference.policy_sha256!==POLICY_SHA256)throw Error('Content review standard binding mismatch');
 export const CATEGORIES = Object.freeze(Object.keys(POLICY.categories));
 const hash = x => createHash('sha256').update(x).digest('hex');
 const normalize = s => s.normalize('NFKC').replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -74,7 +78,7 @@ export function createReviewer({textModel,visionModel,modelRevision,timeoutMs=30
       const categories=[...new Set(checks.flatMap(x=>x.categories))];
       const scores=Object.fromEntries(CATEGORIES.map(k=>[k,Math.max(0,...checks.map(x=>x.scores?.[k]||0))]));
       const confidences=checks.filter(x=>x.decision===decision&&x.confidence!==null&&Number.isFinite(x.confidence)).map(x=>x.confidence);
-      return {schemaVersion:2,scores,confidence:confidences.length?Math.min(...confidences):null,mapDetected:checks.some(x=>x.mapDetected||x.categories.includes('map')),publication:{requiresHumanApproval:true,eligibleForHumanReview:decision!=='reject'},policyVersion:POLICY.version,policySha256:hash(JSON.stringify(POLICY)),modelRevision,contentSha256:digest,decision,categories,reasons:[...new Set(checks.map(x=>x.reason))].map(code=>({code,text:reasonText[code]})),checks,checkedAt:new Date().toISOString()};
+      return {schemaVersion:2,scores,confidence:confidences.length?Math.min(...confidences):null,mapDetected:checks.some(x=>x.mapDetected||x.categories.includes('map')),publication:{requiresHumanApproval:true,eligibleForHumanReview:decision!=='reject'},policyVersion:POLICY.version,policySha256:POLICY_SHA256,standardSha256:STANDARD_SHA256,modelRevision,contentSha256:digest,decision,categories,reasons:[...new Set(checks.map(x=>x.reason))].map(code=>({code,text:reasonText[code]})),checks,checkedAt:new Date().toISOString()};
     };
     try {payload=validate(input);}catch{checks.push({layer:'input',decision:'review',categories:[],reason:'invalid_input'});return finish();}
     const digest=hash(JSON.stringify(payload));const text=normalize(payload.text);

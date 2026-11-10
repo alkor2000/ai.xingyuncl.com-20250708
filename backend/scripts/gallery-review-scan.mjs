@@ -28,3 +28,9 @@ export async function scanSnapshot(snapshot, {reviewer, loadMedia, onResult = as
   }
   return {schemaVersion:1,readOnly:true,snapshotSha256:hash(JSON.stringify(snapshot)),count:results.length,proposedHide:results.filter(r=>r.recommendation==='propose_hide').length,humanReview:results.filter(r=>r.recommendation==='human_review').length,results};
 }
+
+// Explicitly separate write entry. Calling scanSnapshot alone always stays readonly.
+export async function applyApprovedScan(manifest, {approvalReference}={}) {
+  const {default:service}=await import('../src/services/galleryHistoricalScanService.js');
+  return service.apply(manifest,approvalReference);
+}

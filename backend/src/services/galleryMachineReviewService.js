@@ -10,18 +10,19 @@ const library=()=>import(pathToFileURL(libPath()).href);
 const validMedia=media=>{if(!['image','video'].includes(media))throw error('作品类型不正确',400);return media;};
 const digest=(work,safety)=>createHash('sha256').update(JSON.stringify([String(work.id),work.status,work.prompt||'',work.negative_prompt||'',safety?.sha256||null,safety?.file_key||null])).digest('hex');
 const parse=value=>typeof value==='string'?JSON.parse(value):value;
-async function adapters() {
+const bound=(result,lib,options)=>result?.policySha256===lib.POLICY_SHA256&&result?.standardSha256===lib.STANDARD_SHA256&&result?.modelRevision===options.modelRevision;
+async function adapters(query=db.query.bind(db), {lock=false}={}) {
   const ids=[process.env.CONTENT_REVIEW_TEXT_MODEL_ID||'45',process.env.CONTENT_REVIEW_VISION_MODEL_ID||'48'];
   if(ids.some(x=>!/^\d+$/.test(x)))throw error('审核模型配置无效');
-  const {rows}=await db.query('SELECT id,name,api_endpoint,api_key,image_upload_enabled,updated_at FROM ai_models WHERE id IN (?,?) AND is_active=1',ids);
+  const {rows}=await query('SELECT id,name,api_endpoint,api_key,image_upload_enabled,updated_at,is_active FROM ai_models WHERE id IN (?,?)'+(lock?' LOCK IN SHARE MODE':''),ids);
   const {createOpenAIAdapter}=await import(pathToFileURL(path.join(path.dirname(libPath()),'openai-adapter.js')).href);
   const make=(id,visual)=>{
     const row=rows.find(x=>String(x.id)===id);
-    if(!row||visual&&!row.image_upload_enabled)return undefined;
+    if(!row||!row.is_active||visual&&!row.image_upload_enabled)return undefined;
     const endpoint=row.api_endpoint.endsWith('/chat/completions')?row.api_endpoint:row.api_endpoint.replace(/\/$/,'')+'/chat/completions';
     return createOpenAIAdapter({endpoint,apiKey:row.api_key,model:row.name});
   };
-  return {textModel:make(ids[0],false),visionModel:make(ids[1],true),modelRevision:rows.map(x=>`${x.id}:${x.name}:${new Date(x.updated_at).toISOString()}`).join('|')||'configured-model-unavailable'};
+  return {textModel:make(ids[0],false),visionModel:make(ids[1],true),modelRevision:createHash('sha256').update(JSON.stringify({ids,revision:process.env.CONTENT_REVIEW_CONFIG_REVISION||'',models:ids.map(id=>rows.find(x=>String(x.id)===id)||null)})).digest('hex')};
 }
 function manual(result,code,text){
   if(result.decision==='reject')return result;
@@ -43,9 +44,9 @@ async function inspect(media,id,{force=false}={}) {
   const {rows:states}=await db.query(`SELECT * FROM ${media}_safety WHERE generation_id=?`,[id]);
   const safety=states[0]||{revision:0};const contentHash=digest(work,safety);
   const lib=await library();
-  const {rows:cached}=await db.query('SELECT * FROM gallery_machine_reviews WHERE media=? AND generation_id=?',[media,id]);
-  if(!force&&cached[0]?.content_hash===contentHash&&cached[0].policy_version===lib.POLICY.version)return {contentHash,safetyRevision:safety.revision,result:parse(cached[0].result)};
   let options;try{options=await module.exports.adapters();}catch{options={modelRevision:'configured-model-unavailable'};}
+  const {rows:cached}=await db.query('SELECT * FROM gallery_machine_reviews WHERE media=? AND generation_id=?',[media,id]);
+  if(!force&&cached[0]?.content_hash===contentHash&&cached[0].policy_version===lib.POLICY.version&&bound(parse(cached[0].result),lib,options)&&options.modelRevision!=='configured-model-unavailable')return {contentHash,safetyRevision:safety.revision,result:parse(cached[0].result)};
   const reviewer=lib.createReviewer({...options,timeoutMs:60000});
   const text=[work.prompt,work.negative_prompt].filter(Boolean).join('\n');
   let material;
@@ -66,6 +67,9 @@ async function save(query,media,work,safety,inspection) {
   validMedia(media);
   if(Number(safety.revision)!==Number(inspection.safetyRevision)||digest(work,safety)!==inspection.contentHash)throw error('作品已变更，请重新检查');
   const result=inspection.result;
+  const lib=await library();
+  let options;try{options=await module.exports.adapters(query,{lock:true});}catch{options={modelRevision:'configured-model-unavailable'};}
+  if(!bound(result,lib,options))throw error('审核配置或标准已变更，请重新检查');
   const audit=media==='image'?require('./imageSafetyService').event:require('./videoSafetyService').event;
   await audit(query,work.id,null,'machine_review',result.decision,`policy:${result.policyVersion};categories:${result.categories.join(',')}`,safety.sha256||null);
   await query(`INSERT INTO gallery_machine_reviews (media,generation_id,content_hash,policy_version,decision,map_detected,result) VALUES (?,?,?,?,?,?,?)
@@ -76,7 +80,8 @@ async function assertEligible(query,media,id,safety) {
   const {rows:works}=await query(`SELECT id,status,prompt,negative_prompt FROM ${media}_generations WHERE id=?`,[id]);
   const {rows}=await query('SELECT * FROM gallery_machine_reviews WHERE media=? AND generation_id=?',[media,id]);
   const current=rows[0],lib=await library();
-  if(!current||current.content_hash!==digest(works[0],safety)||current.policy_version!==lib.POLICY.version)throw error('请先重新运行当前标准的机器检查，再进行人工审核');
+  let options;try{options=await module.exports.adapters(query,{lock:true});}catch{throw error('审核模型配置不可用，请恢复后重新检查');}
+  if(!current||options.modelRevision==='configured-model-unavailable'||!bound(parse(current.result),lib,options)||current.content_hash!==digest(works[0],safety)||current.policy_version!==lib.POLICY.version)throw error('请先重新运行当前标准的机器检查，再进行人工审核');
   if(current.decision==='reject')throw error('机器已拒绝，不能批准公开');
   return parse(current.result);
 }
