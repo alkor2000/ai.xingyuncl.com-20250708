@@ -1,0 +1,35 @@
+{
+  "version": "2026-11-10.1",
+  "categories": {
+    "sexual": "色情与裸露 / Sexual content and nudity",
+    "violence": "暴力、血腥与自残 / Violence, gore and self-harm",
+    "disgust": "低俗恶心与恶意恶搞 / Vulgar, disgusting and malicious prank content",
+    "discrimination": "侮辱与歧视 / Humiliation and discrimination",
+    "political": "意识形态与政治敏感 / Ideological and politically sensitive content",
+    "minors": "未成年人不宜 / Content unsuitable for minors",
+    "map": "地图与疆界专审 / Map and boundary review"
+  },
+  "thresholds": {"reject": 0.85, "review": 0.35},
+  "blockedPhrases": [
+    {"term":"吃屎","category":"disgust"},
+    {"term":"喝尿挑战","category":"disgust"},
+    {"term":"食用排泄物","category":"disgust"},
+    {"term":"eat feces","category":"disgust"},
+    {"term":"eat faeces","category":"disgust"},
+    {"term":"feces eating challenge","category":"disgust"},
+    {"term":"non-consensual nude","category":"sexual"},
+    {"term":"未成年人色情","category":"sexual"},
+    {"term":"非洲人跳舞搞笑","category":"discrimination"},
+    {"term":"把非洲人当笑料","category":"discrimination"},
+    {"term":"种族低劣","category":"discrimination"},
+    {"term":"racially inferior","category":"discrimination"},
+    {"term":"make africans the butt of the joke","category":"discrimination"},
+    {"term":"取笑残障人士","category":"discrimination"},
+    {"term":"嘲笑残疾人","category":"discrimination"},
+    {"term":"教小孩吸毒","category":"minors"},
+    {"term":"鼓励未成年人赌博","category":"minors"},
+    {"term":"teach children to take drugs","category":"minors"},
+    {"term":"分裂国家的宣传","category":"political"},
+    {"term":"宣传种族灭绝","category":"violence"}
+  ]
+}

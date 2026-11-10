@@ -1,0 +1,9 @@
+{
+  "name": "@pkuailab/content-review",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {".": "./index.js", "./openai-adapter": "./openai-adapter.js"},
+  "scripts": {"test": "node --test test/*.test.js", "benchmark": "node benchmark.js"},
+  "engines": {"node": ">=18"}
+}
