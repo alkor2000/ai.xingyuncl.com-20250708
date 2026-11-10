@@ -7,6 +7,27 @@ const {promisify} = require('node:util');
 const execute = promisify(execFile);
 const {openMediaStream} = require('../src/services/safeImageDownload');
 const sharp = require('sharp');
+async function prepareMedia(bytes,media,{ffmpegPath='ffmpeg',ffprobePath='ffprobe'}={}) {
+  if(!['image','video'].includes(media)||bytes.length>(media==='video'?250:20)*1024*1024)throw Error('Invalid media');
+  if(media==='image'&&(await sharp(bytes,{limitInputPixels:40000000}).metadata()).pages>1)throw Error('Animated media requires human review');
+    const sha256=createHash('sha256').update(bytes).digest('hex');
+    const encode=async buffer=>({mime:'image/jpeg',base64:(await sharp(buffer,{limitInputPixels:40000000}).rotate().resize({width:1024,height:1024,fit:'inside',withoutEnlargement:true}).jpeg({quality:80}).toBuffer()).toString('base64')});
+    if(media==='image')return {sha256,images:[await encode(bytes)]};
+    const directory=await fs.mkdtemp(path.join(os.tmpdir(),'gallery-review-'));await fs.chmod(directory,0o700);
+    try {
+      const file=path.join(directory,'source.mp4');await fs.writeFile(file,bytes,{mode:0o600});
+      const {stdout}=await execute(ffprobePath,['-v','error','-protocol_whitelist','file,pipe','-show_entries','format=duration','-of','json',file],{timeout:15000,maxBuffer:65536});
+      const durationSeconds=Number(JSON.parse(stdout).format?.duration);
+      if(!Number.isFinite(durationSeconds)||durationSeconds<=0||durationSeconds>1800)throw Error('Invalid or excessive duration');
+      const frames=[];
+      for(const fraction of [.04,.22,.4,.6,.78,.96]) {
+        const timeSeconds=durationSeconds*fraction;
+        const frame=await execute(ffmpegPath,['-v','error','-protocol_whitelist','file,pipe','-ss',String(timeSeconds),'-i',file,'-frames:v','1','-vf','scale=1024:1024:force_original_aspect_ratio=decrease','-f','image2pipe','-vcodec','mjpeg','pipe:1'],{encoding:'buffer',timeout:30000,maxBuffer:4*1024*1024});
+        frames.push({...await encode(frame.stdout),timeSeconds});
+      }
+      return {sha256,video:{sha256,durationSeconds,frames}};
+    } finally {await fs.rm(directory,{recursive:true,force:true});}
+}
 // Only use for the explicitly approved public snapshot. The operator binds the
 // known site and OSS hosts; no arbitrary hosts, redirects or private IPs allowed.
 function createMediaLoader({siteOrigin,allowedHosts,ffmpegPath='ffmpeg',ffprobePath='ffprobe',openStream=openMediaStream}) {
@@ -25,23 +46,7 @@ function createMediaLoader({siteOrigin,allowedHosts,ffmpegPath='ffmpeg',ffprobeP
       for await (const chunk of stream) {size+=chunk.length;if(size>max){stream.destroy();throw Error('Media too large');}chunks.push(chunk);}
       bytes=Buffer.concat(chunks);
     } finally {clearTimeout(timer);controller.abort();}
-    const sha256=createHash('sha256').update(bytes).digest('hex');
-    const encode=async buffer=>({mime:'image/jpeg',base64:(await sharp(buffer,{limitInputPixels:40000000}).rotate().resize({width:1024,height:1024,fit:'inside',withoutEnlargement:true}).jpeg({quality:80}).toBuffer()).toString('base64')});
-    if(work.media==='image')return {sha256,images:[await encode(bytes)]};
-    const directory=await fs.mkdtemp(path.join(os.tmpdir(),'gallery-review-'));await fs.chmod(directory,0o700);
-    try {
-      const file=path.join(directory,'source.mp4');await fs.writeFile(file,bytes,{mode:0o600});
-      const {stdout}=await execute(ffprobePath,['-v','error','-protocol_whitelist','file,pipe','-show_entries','format=duration','-of','json',file],{timeout:15000,maxBuffer:65536});
-      const durationSeconds=Number(JSON.parse(stdout).format?.duration);
-      if(!Number.isFinite(durationSeconds)||durationSeconds<=0||durationSeconds>1800)throw Error('Invalid or excessive duration');
-      const frames=[];
-      for(const fraction of [.04,.22,.4,.6,.78,.96]) {
-        const timeSeconds=durationSeconds*fraction;
-        const frame=await execute(ffmpegPath,['-v','error','-protocol_whitelist','file,pipe','-ss',String(timeSeconds),'-i',file,'-frames:v','1','-vf','scale=1024:1024:force_original_aspect_ratio=decrease','-f','image2pipe','-vcodec','mjpeg','pipe:1'],{encoding:'buffer',timeout:30000,maxBuffer:4*1024*1024});
-        frames.push({...await encode(frame.stdout),timeSeconds});
-      }
-      return {sha256,video:{sha256,durationSeconds,frames}};
-    } finally {await fs.rm(directory,{recursive:true,force:true});}
+    return prepareMedia(bytes,work.media,{ffmpegPath,ffprobePath});
   };
 }
-module.exports={createMediaLoader};
+module.exports={createMediaLoader,prepareMedia};

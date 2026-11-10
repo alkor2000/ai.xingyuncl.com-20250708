@@ -11,8 +11,12 @@ router.use(limited);
 router.get('/', handle(async (req, res) => {
   const state = ['pending', 'approved', 'rejected', 'removed', 'reported'].includes(req.query.state) ? req.query.state : 'pending';
   const page = Math.max(1, Math.min(100000, Number.parseInt(req.query.page) || 1));
-  ok(res, await review.list(req.user, state, page));
+  ok(res, await require('../services/galleryReviewQueueService').list('image', req.user, { ...req.query, state, page }));
 }));
+router.get('/selection',handle(async(req,res)=>ok(res,await require('../services/galleryReviewQueueService').selection('image',req.user,req.query))));
+router.get('/groups', handle(async (req,res) => ok(res,await require('../services/galleryReviewQueueService').groups(req.user))));
+router.post('/batch', handle(async (req,res) => ok(res,await require('../services/galleryReviewQueueService').batch('image',req.user,req.body))));
+router.post('/:id/recheck', handle(async (req,res) => ok(res,await require('../services/galleryReviewQueueService').recheck('image',req.params.id,req.user))));
 router.get('/:id/asset', handle(async (req, res) => {
   const bytes = await safety.asset(req.params.id, req.user, false, 'teacher');
   res.set({ 'Cache-Control': 'private, no-store', 'Content-Type': 'image/jpeg', 'X-Content-Type-Options': 'nosniff' }).send(bytes);
@@ -28,6 +32,6 @@ router.post('/:id/import', handle(async (req, res) => {
   ok(res, await require('../services/imageSafetyLegacy').importImage(req.params.id, req.user.id));
 }));
 router.post('/:id/decision', handle(async (req, res) => {
-  ok(res, await review.decide(req.params.id, req.user, req.body.state, req.body.reason, req.body.revision));
+  ok(res, await review.decide(req.params.id, req.user, req.body.state, req.body.reason, req.body.revision, {mapReview:req.body.mapReview}));
 }));
 module.exports = router;

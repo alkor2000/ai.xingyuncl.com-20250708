@@ -17,8 +17,12 @@ router.use('/gallery-review', require('express-rate-limit')({ windowMs: 60000, m
 router.get('/gallery-review', handle(async (req, res) => {
   const state = ['pending','approved','rejected','removed','reported'].includes(req.query.state) ? req.query.state : 'pending';
   const page = Math.max(1, Math.min(100000, Number.parseInt(req.query.page) || 1));
-  ok(res, await safety.list(req.user, state, page));
+  ok(res, await require('../services/galleryReviewQueueService').list('video',req.user,{...req.query,state,page}));
 }));
+router.get('/gallery-review/selection',handle(async(req,res)=>ok(res,await require('../services/galleryReviewQueueService').selection('video',req.user,req.query))));
+router.get('/gallery-review/groups',handle(async(req,res)=>ok(res,await require('../services/galleryReviewQueueService').groups(req.user))));
+router.post('/gallery-review/batch',handle(async(req,res)=>ok(res,await require('../services/galleryReviewQueueService').batch('video',req.user,req.body))));
+router.post('/gallery-review/:id/recheck',handle(async(req,res)=>ok(res,await require('../services/galleryReviewQueueService').recheck('video',req.params.id,req.user))));
 router.get('/gallery-review/:id/asset', handle(async (req, res) => send(res, await safety.asset(req.params.id, req.user, true))));
 router.get('/gallery-review/:id/events', handle(async (req, res) => {
   ok(res, await require('../services/galleryModerationService').history('video', req.params.id, req.user));
@@ -31,6 +35,6 @@ router.post('/gallery-review/:id/import', handle(async (req, res) => {
   ok(res, await require('../services/videoSafetyLegacy').importVideo(req.params.id, req.user.id));
 }));
 router.post('/gallery-review/:id/decision', handle(async (req, res) => {
-  ok(res, await safety.decide(req.params.id, req.user, req.body.state, req.body.reason, req.body.revision));
+  ok(res, await safety.decide(req.params.id, req.user, req.body.state, req.body.reason, req.body.revision, {mapReview:req.body.mapReview}));
 }));
 module.exports = router;

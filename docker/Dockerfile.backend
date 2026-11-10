@@ -16,7 +16,7 @@ RUN sed -i "s/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g" /etc/apk/repositories
 # 安装运行时依赖、mysql客户端、netcat和su-exec
 # mariadb-connector-c 提供 caching_sha2_password 客户端插件：Alpine 的 mysql-client 是 MariaDB 客户端，
 # 缺它连不上 MySQL 8 默认认证的账号（run-migrations.sh 会因此连不上库）
-RUN apk add --no-cache tini mysql-client mariadb-connector-c netcat-openbsd su-exec
+RUN apk add --no-cache tini mysql-client mariadb-connector-c netcat-openbsd su-exec ffmpeg
 # 创建非root用户
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 # 设置工作目录
@@ -27,6 +27,9 @@ COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --chown=nodejs:nodejs backend/package*.json ./
 # 复制应用代码
 COPY --chown=nodejs:nodejs backend/src ./src
+COPY --chown=nodejs:nodejs packages/content-review /opt/content-review
+ENV CONTENT_REVIEW_PACKAGE_PATH=/opt/content-review/index.js
+COPY --chown=nodejs:nodejs backend/scripts/gallery-review-media.cjs ./scripts/gallery-review-media.cjs
 # 复制 Knex 配置和迁移文件（2026-01-27 新增）
 COPY --chown=nodejs:nodejs backend/knexfile.js ./
 COPY --chown=nodejs:nodejs backend/migrations ./migrations

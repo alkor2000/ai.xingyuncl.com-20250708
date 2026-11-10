@@ -1,3 +1,4 @@
+import GalleryMachineResult from '../../../../components/common/GalleryMachineResult';
 import GalleryReportButton from '../../../../components/common/GalleryReportButton';
 import ProtectedImage from '../../../../components/common/ProtectedImage';
 /**
@@ -379,6 +380,7 @@ const ImageCard = memo(({
                 <span>{t('image.creditsConsumed', { credits: item.credits_consumed })}</span>
               )}
               {isOwner && item.gallery_status && item.gallery_status !== 'private' && <Tag>{t(`image.galleryReview.${item.gallery_status}`)}</Tag>}
+              {isOwner && item.machine_review && <GalleryMachineResult result={item.machine_review}/>}
               {isOwner && item.gallery_reason && <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{t('image.galleryReview.ownerReason')}{item.gallery_reason}</p>}
               {item.is_public && <Tag color="green">{t('status.public')}</Tag>}
               {item.is_favorite && isOwner && <Tag color="red">{t('status.favorited')}</Tag>}

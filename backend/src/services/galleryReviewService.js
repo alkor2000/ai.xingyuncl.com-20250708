@@ -28,7 +28,7 @@ async function list(user, state, page) {
     ${from} WHERE ${where} ORDER BY s.gallery_requested_at,ig.id LIMIT 30 OFFSET ?`, [...params, (page - 1) * 30]);
   return { data: rows, total: count[0].total, page };
 }
-async function decide(id, user, state, reason, revision) {
+async function decide(id, user, state, reason, revision, options = {}) {
   if (!['approved', 'rejected'].includes(state) || typeof reason !== 'string' || !reason.trim() || reason.length > 500 || !Number.isSafeInteger(revision)) throw safety.error('请填写审核结论、理由并刷新版本', 400);
   return db.transaction(async query => {
     const generation = await authorize(id, user, query, true);
@@ -38,6 +38,9 @@ async function decide(id, user, state, reason, revision) {
     if (current.gallery_state !== 'pending' && !(['approved','removed','reported'].includes(current.gallery_state) && state === 'rejected')) throw safety.error('作品已撤回或已审核，请刷新', 409);
     const approved = state === 'approved';
     if (approved) {
+      const machineResult=await require('./galleryMachineReviewService').assertEligible(query,'image',id,current);
+      if(options.batch&&(machineResult.decision!=='allow'||machineResult.mapDetected))throw safety.error('待复核或地图作品须逐件完整查看后批准',409);
+      await require('./galleryMachineReviewService').recordMapReview(query,'image',id,current,machineResult,options,user.id);
       if (!current.file_key || !current.sha256 || generation.status !== 'success') throw safety.error('请先导入并检查完整图片', 409);
       const { rows: limits } = await query('SELECT restricted FROM image_safety_restrictions WHERE user_id=? FOR UPDATE', [generation.user_id]);
       const { rows: blocked } = await query("SELECT generation_id FROM image_safety WHERE sha256=? AND state='block' LIMIT 1", [current.sha256]);

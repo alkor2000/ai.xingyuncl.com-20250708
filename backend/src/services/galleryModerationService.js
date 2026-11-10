@@ -51,6 +51,8 @@ async function visibility(media, value, user, body = {}) {
     const restoring = body.action === 'restore';
     if (restoring ? !['removed','reported'].includes(current.gallery_state) : current.gallery_state !== 'approved') throw error('当前状态不能执行此操作，请刷新', 409);
     if (restoring) {
+      const machineResult=await require('./galleryMachineReviewService').assertEligible(query,media,id,current);
+      await require('./galleryMachineReviewService').recordMapReview(query,media,id,current,machineResult,body,user.id);
       if (work.status !== cfg.success || current.state !== 'pass' || !current.file_key || !current.sha256) throw error('作品未通过安全审核或缺少受限文件，不能恢复', 409);
       const { rows: limits } = await query('SELECT restricted FROM image_safety_restrictions WHERE user_id=? FOR UPDATE', [work.user_id]);
       const { rows: blocked } = await query(`SELECT generation_id FROM ${media}_safety WHERE sha256=? AND state='block' LIMIT 1`, [current.sha256]);

@@ -1,3 +1,4 @@
+import GalleryMachineResult from '../../components/common/GalleryMachineResult';
 /**
  * 视频生成页面 - 支持首尾帧控制和模型名称显示
  *
@@ -599,7 +600,8 @@ const VideoGeneration = () => {
               <div className="meta-info">
                 {isGallery && !isOwner && <GalleryReportButton media="video" id={item.id} onHidden={() => getPublicGallery({ page: galleryPagination.page, limit: galleryPagination.limit })} />}
                 {isGallery && item.username && (<span>{item.username}</span>)}
-                {isOwner && item.gallery_reason && <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{t('image.galleryReview.ownerReason')}{item.gallery_reason}</p>}
+                {isOwner && item.machine_review && <GalleryMachineResult result={item.machine_review}/>}
+              {isOwner && item.gallery_reason && <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{t('image.galleryReview.ownerReason')}{item.gallery_reason}</p>}
                 <span>{new Date(item.created_at).toLocaleString()}</span>
                 {item.credits_consumed !== undefined && (
                   <span>{t('video.credits', { credits: item.credits_consumed })}</span>

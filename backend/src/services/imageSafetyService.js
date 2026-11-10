@@ -75,6 +75,9 @@ async function project(value) {
   // Only generation DTOs carry these image fields. Never emit original CDN URLs.
   if (out.id && ('local_path' in out || 'thumbnail_path' in out || 'image_url' in out)) {
     const safety = await get(out.id);
+    const {rows:machineRows}=await db.query('SELECT result FROM gallery_machine_reviews WHERE media=? AND generation_id=?',['image',out.id]);
+    const machineResult=machineRows[0]?.result;
+    out.machine_review=safety.gallery_state==='approved'?null:typeof machineResult==='string'?JSON.parse(machineResult):machineResult||null;
     out.moderation_status = safety.state;
     out.gallery_status = safety.gallery_state || 'private';
     out.gallery_reason = safety.gallery_state === 'approved' ? null : safety.gallery_reason || null;
@@ -89,8 +92,10 @@ async function project(value) {
   return out;
 }
 async function publish(id, userId) {
+  const machine=require('./galleryMachineReviewService');
+  const inspection=await machine.forOwner('image',id,userId);
   return db.transaction(async query => {
-    const { rows } = await query('SELECT id,is_public,status FROM image_generations WHERE id=? AND user_id=? FOR UPDATE', [id, userId]);
+    const { rows } = await query('SELECT id,is_public,status,prompt,negative_prompt FROM image_generations WHERE id=? AND user_id=? FOR UPDATE', [id, userId]);
     if (!rows.length) throw error('记录不存在', 404);
     await query('INSERT IGNORE INTO image_safety (generation_id) VALUES (?)', [id]);
     const { rows: decisions } = await query('SELECT * FROM image_safety WHERE generation_id=? FOR UPDATE', [id]);
@@ -98,16 +103,19 @@ async function publish(id, userId) {
     if (['removed', 'reported'].includes(current.gallery_state)) throw error('作品已暂时下架，须由管理员复核后恢复', 409);
     const cancel = rows[0].is_public || current.gallery_state === 'pending';
     if (!cancel) {
+      if(!inspection)throw error('作品已变更，请重新提交',409);
+      await machine.save(query,'image',rows[0],current,inspection);
       const { rows: restriction } = await query('SELECT restricted FROM image_safety_restrictions WHERE user_id=? FOR UPDATE', [userId]);
       if (restriction[0]?.restricted || rows[0].status !== 'success' || current.state === 'block') throw error('图片未通过内容审核，不能提交公开申请');
     }
-    const galleryState = cancel ? 'private' : 'pending';
+    const galleryState = cancel ? 'private' : inspection.result.decision==='reject' ? 'rejected' : 'pending';
     await query(`UPDATE image_safety SET gallery_state=?,gallery_reviewer_id=NULL,gallery_reviewed_at=NULL,
       gallery_requested_at=?,revision=revision+1,updated_at=NOW() WHERE generation_id=?`, [galleryState, cancel ? null : new Date(), id]);
+    await query('UPDATE image_safety SET gallery_reason=? WHERE generation_id=?',[!cancel&&inspection.result.decision==='reject'?inspection.result.reasons.map(x=>x.text).join('；').slice(0,500):null,id]);
     // A student request can never write is_public=1, including legacy clients.
     await query('UPDATE image_generations SET is_public=0,gallery_approved_by=NULL WHERE id=?', [id]);
     await event(query, id, userId, cancel ? 'gallery_withdraw' : 'gallery_submit', galleryState, 'owner_request');
-    return { is_public: 0, gallery_status: galleryState };
+    return { is_public: 0, gallery_status: galleryState, gallery_reason: !cancel&&inspection.result.decision==='reject'?inspection.result.reasons.map(x=>x.text).join('；').slice(0,500):null, machine_review: cancel?null:inspection.result };
   });
 }
 async function decide(id, actor, state, reason, revision) {

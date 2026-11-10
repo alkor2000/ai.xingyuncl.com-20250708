@@ -60,6 +60,9 @@ async function project(value) {
   const out = { ...value };
   if (out.id && ('local_path' in out || 'video_url' in out)) {
     const current = await get(out.id);
+    const {rows:machineRows}=await db.query('SELECT result FROM gallery_machine_reviews WHERE media=? AND generation_id=?',['video',out.id]);
+    const machineResult=machineRows[0]?.result;
+    out.machine_review=current.gallery_state==='approved'?null:typeof machineResult==='string'?JSON.parse(machineResult):machineResult||null;
     out.gallery_reason = current.gallery_state === 'approved' ? null : current.gallery_reason || null;
     out.moderation_status = current.state; out.gallery_status = current.gallery_state; out.moderation_revision = current.revision;
     out.local_path = current.state === 'pass' && current.file_key ? `/api/video/generation/${out.id}/asset` : null;
@@ -70,22 +73,27 @@ async function project(value) {
   return out;
 }
 async function publish(id, userId) {
+  const machine=require('./galleryMachineReviewService');
+  const inspection=await machine.forOwner('video',id,userId);
   return db.transaction(async query => {
-    const { rows } = await query('SELECT id,status,is_public FROM video_generations WHERE id=? AND user_id=? FOR UPDATE', [id, userId]);
+    const { rows } = await query('SELECT id,status,is_public,prompt,negative_prompt FROM video_generations WHERE id=? AND user_id=? FOR UPDATE', [id, userId]);
     if (!rows.length) throw error('视频不存在', 404);
     await query('INSERT IGNORE INTO video_safety (generation_id) VALUES (?)', [id]);
     const { rows: states } = await query('SELECT * FROM video_safety WHERE generation_id=? FOR UPDATE', [id]);
     const current = states[0], cancel = rows[0].is_public || current.gallery_state === 'pending';
     if (['removed', 'reported'].includes(current.gallery_state)) throw error('作品已暂时下架，须由管理员复核后恢复', 409);
     if (!cancel) {
+      if(!inspection)throw error('作品已变更，请重新提交',409);
+      await machine.save(query,'video',rows[0],current,inspection);
       const { rows: limits } = await query('SELECT restricted FROM image_safety_restrictions WHERE user_id=? FOR UPDATE', [userId]);
       if (rows[0].status !== 'succeeded' || current.state === 'block' || limits[0]?.restricted) throw error('视频未通过安全审核，不能提交公开申请');
     }
-    const state = cancel ? 'private' : 'pending';
+    const state = cancel ? 'private' : inspection.result.decision==='reject' ? 'rejected' : 'pending';
     await query('UPDATE video_safety SET gallery_state=?,reviewer_id=NULL,reviewed_at=NULL,requested_at=?,revision=revision+1 WHERE generation_id=?', [state, cancel ? null : new Date(), id]);
+    await query('UPDATE video_safety SET gallery_reason=? WHERE generation_id=?',[!cancel&&inspection.result.decision==='reject'?inspection.result.reasons.map(x=>x.text).join('；').slice(0,500):null,id]);
     await query('UPDATE video_generations SET is_public=0,gallery_approved_by=NULL WHERE id=?', [id]);
     await event(query, id, userId, cancel ? 'gallery_withdraw' : 'gallery_submit', state, 'owner_request');
-    return { is_public: 0, gallery_status: state };
+    return { is_public: 0, gallery_status: state, gallery_reason: !cancel&&inspection.result.decision==='reject'?inspection.result.reasons.map(x=>x.text).join('；').slice(0,500):null, machine_review: cancel?null:inspection.result };
   });
 }
 async function asset(id, user, review = false) {
@@ -97,7 +105,7 @@ async function asset(id, user, review = false) {
   if (review) await event(db.query.bind(db), id, user.id, 'review_view', row.state, 'restricted_full_video_preview', row.sha256);
   return file;
 }
-async function decide(id, user, state, reason, revision) {
+async function decide(id, user, state, reason, revision, options = {}) {
   if (!['approved','rejected'].includes(state) || typeof reason !== 'string' || !reason.trim() || reason.length > 500 || !Number.isSafeInteger(revision)) throw error('请填写审核结论、理由并刷新版本', 400);
   return db.transaction(async query => {
     const generation = await authorize(id, user, query, true);
@@ -106,6 +114,9 @@ async function decide(id, user, state, reason, revision) {
     if (!current || current.revision !== revision) throw error('视频已变更，请刷新后重新审核', 409);
     if (current.gallery_state !== 'pending' && !(['approved','removed','reported'].includes(current.gallery_state) && !approved)) throw error('视频已撤回或已审核', 409);
     if (approved) {
+      const machineResult=await require('./galleryMachineReviewService').assertEligible(query,'video',id,current);
+      if(options.batch&&(machineResult.decision!=='allow'||machineResult.mapDetected))throw error('待复核或地图作品须逐件完整查看后批准',409);
+      await require('./galleryMachineReviewService').recordMapReview(query,'video',id,current,machineResult,options,user.id);
       if (!current.file_key || generation.status !== 'succeeded') throw error('请先导入并完整检查视频', 409);
       const { rows: limits } = await query('SELECT restricted FROM image_safety_restrictions WHERE user_id=? FOR UPDATE', [generation.user_id]);
       const { rows: blocked } = await query("SELECT generation_id FROM video_safety WHERE sha256=? AND state='block' LIMIT 1", [current.sha256]);

@@ -430,7 +430,8 @@ const useVideoStore = create((set, get) => ({
             item.id === id ? { ...item, ...response.data.data } : item
           )
         }));
-        message.success(i18n.t(response.data.data?.gallery_status === 'pending' ? 'video.galleryReview.pending' : 'video.setPrivateResult'));
+        if(response.data.data?.machine_review?.decision==='reject') message.warning(i18n.t('image.galleryReview.machineRejected'));
+        else message.success(i18n.t(response.data.data?.gallery_status === 'pending' ? 'video.galleryReview.pending' : 'video.setPrivateResult'));
         return true;
       }
     } catch (error) {
