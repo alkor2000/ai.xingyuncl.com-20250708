@@ -1,5 +1,5 @@
 {
-  "version": "2026-11-10.1",
+  "version": "2026-11-10.2",
   "categories": {
     "sexual": "色情与裸露 / Sexual content and nudity",
     "violence": "暴力、血腥与自残 / Violence, gore and self-harm",
@@ -10,6 +10,12 @@
     "map": "地图与疆界专审 / Map and boundary review"
   },
   "thresholds": {"reject": 0.85, "review": 0.35},
+  "reviewPhrases": [
+    {"term":"引用辱骂","category":"discrimination"},
+    {"term":"引用歧视性话语","category":"discrimination"},
+    {"term":"quote insults","category":"discrimination"},
+    {"term":"trích dẫn lời lăng mạ","category":"discrimination"}
+  ],
   "blockedPhrases": [
     {"term":"吃屎","category":"disgust"},
     {"term":"喝尿挑战","category":"disgust"},

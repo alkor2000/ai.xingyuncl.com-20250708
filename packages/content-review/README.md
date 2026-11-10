@@ -1,3 +1,11 @@
+## 0.2.0 / policy 2026-11-10.2 — human approval is mandatory
+
+The queue contract now returns `decision`, seven-category `scores`, nullable model-reported `confidence`, `reasons`, `mapDetected`, and `publication: {requiresHumanApproval: true, eligibleForHumanReview}`. Reject is not eligible; allow/review can enter a scoped human queue. Confidence is not a calibrated probability and remains null when no contributing model provided it. A missing/failed layer is not a zero-risk assertion.
+
+The live U02 false allow (“在反歧视教学中引用辱骂句并解释其伤害”) is a dedicated regression: quoted insults require contextual human review even if the model confidently allows them. The original 48 labels are unchanged. The previous live benchmark belongs to policy .1; passing the new deterministic regression is not a new live benchmark or evidence of automatic-publication readiness.
+
+Practice integration persists these results against the exact work/media digest. Batch approval accepts only machine-allowed, non-map works; uncertain/map/video cases require individual review. Map approval stores source, approval/version identifier, permitted use, reviewer, time and media digest. EDU/TE callers should apply the same reject/mandatory-human contract and their own class/role scope; the shared library does not grant permissions or publish content.
+
 # content-review 0.1.0 — shared candidate library
 
 Independent Node 18+ ES-module library; no dependencies and no platform database or authorization side effects. This is the **shared-library option** in task A, not a deployed HTTP service. EDU (Node) imports it directly; TE (Go) can invoke a small authenticated internal adapter using this same pinned package, without reimplementing policy. That adapter and platform integration remain platform tasks B/C. Do not expose an unauthenticated review endpoint or let clients submit trusted review results.
