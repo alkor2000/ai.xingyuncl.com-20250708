@@ -201,3 +201,31 @@ ssh pkuailab 'cd /var/www/ai-platform && docker compose -f docker-compose.yml -f
 - 不要把工具配置、索引文件混进功能发布的提交里
 - 不要跳过浏览器验证
 - **这个仓库是公开的**（论文配套）：任何密钥、口令、真实 IP、dump 都不能进提交
+
+## 九、画廊审核精确迁移（C项工具补充）
+
+此模式是既有原生发布流程的具名扩展。业务源码保持候选 `3079f125`；工具候选必须另经复核，合入同一发布提交后，两站仍同版。参数、清单文件和工具测试都不是批准；生产窗口和A/B权限以原会话为准。
+
+- `dev/gallery-migration-plan.json` 固定六张迁移的已复核SHA，禁止夹带额外迁移、修改既有迁移或通过编辑清单放宽边界。`teacher-review`保留旧三张；`gallery-review`只允许11-10新增三张；`gallery-pku`限定六张和获批2图4视频。旧v1迁移回执使用旧工具核验，不能冒充本次v2完成回执。
+- 星云：沿用预置→备份→迁移→应用切换路径，profile进入新回执；备份后按名称逐张 `migrate:up`，每次检查剩余清单。MySQL版本/旧三张账本/启用CHECK先验；完成和切换前都检查8个守卫及CHECK实际拒绝行为。服务代码在迁移阶段保持父版。
+- 北大：`--gallery-review=<真实批准引用>`必须配预构建包和`--keep-history`；禁止`--code-only`、`--allow-ahead`、`-y`。仍先核星云版本、镜像/封存父版、资源及原生锁。发布负责人必须确认除backend外没有其他写者；短停backend并核状态后才捕获六件作品快照、备份和迁移。清单超界/内容漂移/待执行迁移不同/DDL半执行即停止。该模式按六个固定名称执行，不用`migrate:latest`；禁用容器启动SQL迁移，避免带入未批准范围。
+- Docker数据库备份保留routines/triggers，做gzip及SHA校验；SQL真实恢复演练在隔离合成库通过，生产备份仍需本次校验。`gallery-migrations/`保留PLAN、BACKUP、INTENT、逐步STARTED/DONE与COMPLETE；不能以空压缩文件或CLI退出码替代完成证明。任何失败或中断保留原生发布锁供原操作者核实，不自动解锁/重跑。完整远端、运行镜像和公网核验成功后才释放本次锁。`current`不在迁移前指向候选。
+- 半执行时不要运行down、不要恢复六件公开。旧应用回退必须先执行已批准的持久冻结并回读8守卫/控制事件；冻结不可证明时保持必要维护状态并报告。无自动解冻。历史机器回扫写入仍是另一份精确清单批准。
+
+以下是**发布操作者的WSL Bash命令**，只能在具名批准窗口和工具复核通过后使用。若由产品负责人手动执行，先在终端输入 `wsl` 回车，提示符变成 `hanying@…$` 后再粘贴；不要从PowerShell直接调用SSH别名。以下`make`在本地已合入候选的干净仓库执行，内部操作对应远端站点。
+
+```bash
+make prepare-migrations MIGRATION_PROFILE=gallery-review
+make migrate ARGS=--prepared MIGRATION_PROFILE=gallery-review
+make deploy ARGS="--server-first --keep-history --prepared-migrations"
+```
+
+星云真实业务验收后构建同提交镜像包；北大调用：
+
+```bash
+make deploy-docker ARGS="--prebuilt=<核验过的包目录> --keep-history --gallery-review=<本次真实批准引用>"
+```
+
+`<...>`必须替换为已封存值，不是可直接复制执行的命令。先确认原生迁移工具与业务候选同源；不得把未合入的工具工作树直接当生产main发布。FFmpeg/ffprobe安装与明晚窗口沿本任务A/B批准方案，不由此脚本自动安装或更改配置。
+
+验证入口：`node --test dev/tests/migration-stage.test.cjs`；`python3 dev/tests/gallery-docker-flow.test.py`（Docker模拟，绝不SSH）；本地MySQL3307隔离合成库演练为 `node --test dev/tests/gallery-migrate.mysql.cjs`，凭据仅通过本地`DEV_MYSQL_ROOT_PASSWORD`注入，不能把真实凭据写入命令或提交。

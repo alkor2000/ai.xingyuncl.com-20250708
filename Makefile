@@ -85,11 +85,11 @@ migrate-status: ## 查看生产库 knex 迁移状态
 	ssh -n $(SSH_HOST) '$(NVM); cd $(REMOTE_DIR)/backend && npx knex migrate:status'
 
 .PHONY: migrate
-migrate: ## 原迁移入口；ARGS=--prepared 核验已预置的三项老师审核迁移后运行备份门
+migrate: ## 原迁移入口；ARGS=--prepared 核验已预置的精确迁移清单后运行备份门
 	@if [ "$(ARGS)" = --prepared ]; then bash $(ROOT)/dev/prepare-migrations.sh migrate; elif [ -z "$(ARGS)" ]; then $(MAKE) migrate-native; else echo '未知迁移参数'; exit 2; fi
 
 .PHONY: prepare-migrations
-prepare-migrations: ## 仅预置已提交的三项老师审核迁移，不切应用、不连库迁移
+prepare-migrations: ## 预置精确迁移清单（MIGRATION_PROFILE=gallery-review为11-10三张），不切应用
 	bash $(ROOT)/dev/prepare-migrations.sh prepare
 
 .PHONY: migrate-native

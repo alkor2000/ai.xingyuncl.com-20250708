@@ -41,7 +41,7 @@ LOCK_DIR="/var/backups/ai-platform/releases/.lock"
 for v in "$PREBUILT_DISK_MARGIN_GIB" "$PREBUILT_MIN_AVAILABLE_MIB"; do
   [[ "$v" =~ ^[0-9]+$ ]] || { echo "❌ DOCKER_PREBUILT_* 阈值必须是非负整数（当前: $v）"; exit 1; }
 done
-ASSUME_YES=0; ALLOW_AHEAD=0; REBUILD=0; PKG_DIR=""; MODE=build; CODE_ONLY=0; KEEP_HISTORY=0
+ASSUME_YES=0; ALLOW_AHEAD=0; REBUILD=0; PKG_DIR=""; MODE=build; CODE_ONLY=0; KEEP_HISTORY=0; GALLERY_REVIEW=0; GALLERY_APPROVAL=""
 # 纯代码发布不许包含的路径：会碰库、或会改容器启动方式的文件。
 CODE_ONLY_FORBIDDEN='^(backend/migrations/|backend/knexfile\.js$|database/|tools/database-upgrade/|docker/|docker-compose\.yml$)'
 for a in "$@"; do
@@ -52,11 +52,16 @@ for a in "$@"; do
     --prebuilt=*) PKG_DIR="${a#--prebuilt=}"; MODE=prebuilt ;;
     --code-only) CODE_ONLY=1 ;;
     --keep-history) KEEP_HISTORY=1 ;;
+    --gallery-review=*) GALLERY_REVIEW=1; GALLERY_APPROVAL="${a#--gallery-review=}" ;;
     *) echo "未知参数: $a"; exit 1 ;;
   esac
 done
 if [ "$CODE_ONLY" = 1 ] && [ "$MODE" != prebuilt ]; then
   echo "❌ --code-only 只能和 --prebuilt=<包目录> 一起用（Docker 站点的发布路线是预构建镜像）"; exit 1
+fi
+if [ "$GALLERY_REVIEW" = 1 ]; then
+  [ "$MODE" = prebuilt ] && [ "$KEEP_HISTORY" = 1 ] && [ "$CODE_ONLY" = 0 ] && [ "$ALLOW_AHEAD" = 0 ] && [ "$ASSUME_YES" = 0 ] || { echo 'STOP: gallery review requires prebuilt, keep-history, confirmation and first-site order'; exit 2; }
+  [[ "$GALLERY_APPROVAL" =~ ^[A-Za-z0-9_.:-]{1,200}$ ]] || { echo 'STOP: real gallery approval reference required'; exit 2; }
 fi
 SSH="ssh -o BatchMode=yes -o ConnectTimeout=20 $SSH_HOST"
 PREFLIGHT="$ROOT/dev/docker-release-preflight.sh"
@@ -205,6 +210,10 @@ else
   echo "  发布方式:    常规：切换前跑 knex 迁移；容器启动跑 SQL 迁移脚本"
   if [ "$KEEP_HISTORY" = 1 ]; then echo "  历史保留:    不清理旧镜像和旧库备份"; else echo "  清理策略:    切换成功后清理旧镜像和旧库备份"; fi
 fi
+if [ "$GALLERY_REVIEW" = 1 ]; then
+  echo '  画廊迁移: 六张固定清单；停止backend并排空写者；仅2图4视频撤回pending；失败保留锁/证据，不自动恢复公开或裸回退'
+  echo '  隔离前提: 发布负责人已确认无其他数据库写者；无此证据不得确认。启动SQL迁移禁用，保留全部历史。'
+fi
 echo "=============================================================="
 if [ "$ASSUME_YES" != 1 ]; then
   read -rp "确认发布到 ${SITE_ORIGIN#https://}? [y/N] " ans
@@ -213,8 +222,8 @@ fi
 
 # 唯一发布锁：任何服务器写入（传码、传包、构建、加载、切换）之前拿到；拿不到就是有别的发布在跑，拒绝。
 LOCK_TOKEN="deploy-$(date +%Y%m%d%H%M%S)-$$-$LOCAL_SHORT"
-LOCK_HELD=0
-release_lock() { if [ "$LOCK_HELD" = 1 ]; then $SSH bash -s -- release "$LOCK_DIR" "$LOCK_TOKEN" < "$LOCKSH" >/dev/null 2>&1 || true; fi; }
+LOCK_HELD=0; GALLERY_REMOTE_DONE=0
+release_lock() { if [ "$LOCK_HELD" = 1 ] && [ "$GALLERY_REVIEW" = 1 ] && [ "$GALLERY_REMOTE_DONE" != 1 ]; then echo "STOP: retain gallery release lock $LOCK_TOKEN until original owner verifies terminal state" >&2; return; fi; if [ "$LOCK_HELD" = 1 ]; then $SSH bash -s -- release "$LOCK_DIR" "$LOCK_TOKEN" < "$LOCKSH" >/dev/null 2>&1 || true; fi; }
 trap release_lock EXIT
 if ! $SSH bash -s -- acquire "$LOCK_DIR" "$LOCK_TOKEN" < "$LOCKSH"; then
   echo "❌ 拿不到发布锁 $LOCK_DIR：有别的发布在跑或上次发布中断留下了锁。核实没有发布在跑（docker ps、看锁里的 owner）后再手工 rmdir，脚本不抢锁。"; exit 1
@@ -276,7 +285,7 @@ fi
 # ---------- 3–5. 服务器上构建或加载、备份、迁移、切换、清理 ----------
 echo "==> 服务器$([ "$MODE" = prebuilt ] && echo 加载镜像 || echo 构建镜像)并切换 ..."
 REMOTE_LOG="$(mktemp)"
-$SSH bash -s "$REMOTE_DIR" "$LOCAL_SHORT" "$KEEP_RELEASES" "$GATE_FREE_GIB" "$GATE_AVAILABLE_MIB" "$MIN_FREE_INODES" "$KEEP_DB_BACKUPS" "$MODE" "$LOCK_DIR" "$LOCK_TOKEN" "$REMOTE_PKG_DIR" "$TASK" "$TAR_SHA256" "$BACKEND_IMAGE_ID" "$FRONTEND_IMAGE_ID" "$IMAGE_PLATFORM" "$CODE_ONLY" "$KEEP_HISTORY" <<'REMOTE' | tee "$REMOTE_LOG"
+$SSH bash -s "$REMOTE_DIR" "$LOCAL_SHORT" "$KEEP_RELEASES" "$GATE_FREE_GIB" "$GATE_AVAILABLE_MIB" "$MIN_FREE_INODES" "$KEEP_DB_BACKUPS" "$MODE" "$LOCK_DIR" "$LOCK_TOKEN" "$REMOTE_PKG_DIR" "$TASK" "$TAR_SHA256" "$BACKEND_IMAGE_ID" "$FRONTEND_IMAGE_ID" "$IMAGE_PLATFORM" "$CODE_ONLY" "$KEEP_HISTORY" "$GALLERY_REVIEW" "$GALLERY_APPROVAL" "$LOCAL_SHA" <<'REMOTE' | tee "$REMOTE_LOG"
 set -euo pipefail
 REMOTE_DIR="$1"; SHORT="$2"; KEEP="$3"
 MIN_FREE_GIB="$4"; MIN_AVAILABLE_MIB="$5"; MIN_FREE_INODES="$6"; KEEP_DB="${7:-7}"
@@ -284,9 +293,11 @@ MODE="${8:-build}"; LOCK_DIR="${9:-}"; LOCK_TOKEN="${10:-}"
 PKG_DIR="${11:-}"; PKG_TASK="${12:-}"; PKG_SHA="${13:-}"; PKG_BACKEND_ID="${14:-}"; PKG_FRONTEND_ID="${15:-}"; PKG_PLATFORM="${16:-}"
 CODE_ONLY="${17:-0}"
 KEEP_HISTORY="${18:-0}"
+GALLERY_REVIEW="${19:-0}"; GALLERY_APPROVAL="${20:-}"; TARGET_FULL="${21:-}"
+[ "$GALLERY_REVIEW" != 1 ] || umask 077
 cd "$REMOTE_DIR"
 # 无论成败，退出时释放发布锁（只释放自己这把）。
-if [ -n "$LOCK_DIR" ] && [ -n "$LOCK_TOKEN" ]; then
+if [ "$GALLERY_REVIEW" != 1 ] && [ -n "$LOCK_DIR" ] && [ -n "$LOCK_TOKEN" ]; then
   trap 'bash dev/docker-release-lock.sh release "$LOCK_DIR" "$LOCK_TOKEN" >/dev/null 2>&1 || true' EXIT
 fi
 GATE_LABEL=build; [ "$MODE" = prebuilt ] && GATE_LABEL=prebuilt
@@ -295,6 +306,11 @@ bash dev/docker-release-preflight.sh resources "$MIN_FREE_GIB" "$MIN_AVAILABLE_M
 TS=$(date +%Y%m%d_%H%M%S)
 if [ "$MODE" = prebuilt ]; then TAG="$PKG_TASK"; else TAG="v-${SHORT}-${TS}"; fi
 REL="/var/backups/ai-platform/releases/ai-platform-${TAG}"
+if [ "$GALLERY_REVIEW" = 1 ]; then
+  [ ! -e "$REL" ] || { echo 'STOP: gallery release already attempted; inspect evidence, no retry'; exit 2; }
+  [ "$(git rev-parse HEAD)" = "$TARGET_FULL" ] || exit 2
+  git diff --exit-code HEAD -- dev/gallery-migrate.cjs dev/gallery-migration-plan.json >/dev/null
+fi
 mkdir -p "$REL" /var/backups/ai-platform/mysql
 OLD_B=$(docker inspect ai-platform-backend --format '{{.Config.Image}}' 2>/dev/null || echo none)
 OLD_F=$(docker inspect ai-platform-frontend --format '{{.Config.Image}}' 2>/dev/null || echo none)
@@ -331,7 +347,7 @@ if [ "$MODE" = prebuilt ]; then
     echo "❌ 镜像核验失败：已删除刚加载的两个标签；没有备份、没有迁移、没有切换；这条路径不会在服务器上构建。包保留在 $PKG_DIR 供排查。"; exit 1
   fi
   echo "    镜像核验通过（只表示镜像已在服务器本地，业务尚未切换）"
-  if [ "$CODE_ONLY" = 1 ]; then
+  if [ "$CODE_ONLY" = 1 ] || [ "$GALLERY_REVIEW" = 1 ]; then
     # 下面要替换的 CMD 必须就是这一份，否则"只留后半段"不成立；镜像改过启动方式就不是纯代码发布。
     IMAGE_CMD=$(docker image inspect "ai-platform-backend:$TAG" --format '{{json .Config.Cmd}}' 2>/dev/null || true)
     if [ "$IMAGE_CMD" != '["/bin/sh","-c","/usr/local/bin/run-migrations.sh && su-exec nodejs node src/server.js"]' ]; then
@@ -375,7 +391,7 @@ fi
 # 纯代码发布：镜像 CMD 是 "run-migrations.sh && su-exec nodejs node src/server.js"，这里只留后半段，容器启动就不连库跑 SQL 迁移脚本。
 # 只写在这两个发布文件里、镜像字节不变；下一次常规发布的 override 没有这一行，自然回到镜像自己的 CMD。
 CODE_ONLY_COMMAND='["su-exec", "nodejs", "node", "src/server.js"]'
-if [ "$CODE_ONLY" = 1 ]; then
+if [ "$CODE_ONLY" = 1 ] || [ "$GALLERY_REVIEW" = 1 ]; then
   for f in "$REL/release.override.yml" "$REL/rollback.override.yml"; do
     if [ -f "$f" ]; then sed -i "/^    image: ai-platform-backend:/a\\    command: $CODE_ONLY_COMMAND" "$f"; fi
   done
@@ -402,15 +418,47 @@ fi
   fi
 } > "$REL/RELEASE.txt"
 [ "$MODE" = prebuilt ] && [ -f "$PKG_DIR/MANIFEST.env" ] && cp "$PKG_DIR/MANIFEST.env" "$REL/IMAGE-MANIFEST.env"
-ln -sfn "$REL" /var/backups/ai-platform/releases/current
+if [ "$GALLERY_REVIEW" != 1 ]; then ln -sfn "$REL" /var/backups/ai-platform/releases/current; fi
+if [ "$GALLERY_REVIEW" = 1 ]; then
+  echo "RELEASE_KIND=gallery-review" >> "$REL/RELEASE.txt"
+  echo "GALLERY_APPROVAL=$GALLERY_APPROVAL" >> "$REL/RELEASE.txt"
+  mkdir -m 700 "$REL/gallery-migrations"
+  # Stop the sole known business writer before taking the exact public snapshot and backup.
+  docker compose stop backend </dev/null
+  [ "$(docker inspect ai-platform-backend --format '{{.State.Running}}')" = false ] || exit 2
+  echo "BACKEND_STOPPED=1" >> "$REL/RELEASE.txt"
+  gallery_migration() {
+    docker compose -f docker-compose.yml -f "$REL/release.override.yml" run --rm --no-deps -T \
+      -e GALLERY_WRITERS_STOPPED=1 -v "$REMOTE_DIR/dev:/gallery-tools:ro" -v "$REL/gallery-migrations:/gallery-evidence" \
+      backend node /gallery-tools/gallery-migrate.cjs "$1" /app /gallery-evidence "$GALLERY_APPROVAL" </dev/null
+  }
+  gallery_migration inspect
+fi
 
 echo "    备份数据库 ..."
 BK="/var/backups/ai-platform/mysql/ai_platform-${TS}.sql.gz"
-docker exec ai-platform-mysql sh -c 'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --single-transaction --quick "$MYSQL_DATABASE" 2>/dev/null' | gzip > "$BK"
+if [ "$GALLERY_REVIEW" = 1 ]; then
+  [ ! -e "$BK" ] || exit 2
+  docker exec ai-platform-mysql sh -c 'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --single-transaction --quick --routines --triggers --no-tablespaces "$MYSQL_DATABASE" 2>/dev/null' | gzip > "$BK"
+  gzip -t "$BK"
+  sha256sum "$BK" > "$BK.sha256"
+  chmod 600 "$BK" "$BK.sha256"
+  sha256sum -c "$BK.sha256" >/dev/null
+  BK_SHA=$(cut -d' ' -f1 "$BK.sha256")
+  printf '{"sha256":"%s","gzip_verified":true,"writers_stopped":true}\n' "$BK_SHA" > "$REL/gallery-migrations/BACKUP.json"
+else
+  docker exec ai-platform-mysql sh -c 'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" --single-transaction --quick "$MYSQL_DATABASE" 2>/dev/null' | gzip > "$BK"
+fi
 [ -s "$BK" ] || { echo "❌ 备份为空，中止"; exit 1; }
 echo "    备份: $BK ($(du -h "$BK" | cut -f1))"; echo "DB_BACKUP=$BK" >> "$REL/RELEASE.txt"
 
-if [ "$CODE_ONLY" = 1 ]; then
+if [ "$GALLERY_REVIEW" = 1 ]; then
+  [ "$(docker inspect ai-platform-backend --format '{{.State.Running}}')" = false ] || exit 2
+  sha256sum -c "$BK.sha256" >/dev/null
+  gallery_migration apply
+  [ -s "$REL/gallery-migrations/COMPLETE.json" ] || exit 2
+  echo "DB_MIGRATED=gallery-exact-six" >> "$REL/RELEASE.txt"
+elif [ "$CODE_ONLY" = 1 ]; then
   echo "    纯代码发布：不执行 knex 迁移"
   echo "DB_MIGRATED=skipped-code-only" >> "$REL/RELEASE.txt"
 else
@@ -430,26 +478,27 @@ for i in $(seq 1 36); do
 done
 if [ "$RUNTIME_STATUS" != CURRENT ]; then
   echo "❌ 双容器 3 分钟内未运行本次镜像且 healthy（$RUNTIME_STATUS）。回滚命令："
-  echo "   docker compose -f $REMOTE_DIR/docker-compose.yml -f $REL/rollback.override.yml up -d backend frontend"
+  if [ "$GALLERY_REVIEW" = 1 ]; then echo "   STOP: keep lock; commit and verify persistent gallery freeze BEFORE any old application rollback"; else echo "   docker compose -f $REMOTE_DIR/docker-compose.yml -f $REL/rollback.override.yml up -d backend frontend"; fi
   docker logs --tail 40 ai-platform-backend 2>&1 | cut -c1-160; exit 1
 fi
 L=$(docker logs ai-platform-backend 2>&1 || true)
-if [ "$CODE_ONLY" = 1 ]; then
+if [ "$CODE_ONLY" = 1 ] || [ "$GALLERY_REVIEW" = 1 ]; then
   # 切换后再核一次：新容器的 CMD 确实被替换，且日志里没有启动脚本的第一行；不符就不算发布成功。
   ACTUAL_CMD=$(docker inspect ai-platform-backend --format '{{json .Config.Cmd}}' 2>/dev/null || true)
   if [ "$ACTUAL_CMD" != '["su-exec","nodejs","node","src/server.js"]' ] || grep -q '检查数据库迁移' <<<"$L"; then
     echo "❌ 纯代码发布的后端不符合预期（CMD=${ACTUAL_CMD:-<读不到>}，或日志显示启动迁移脚本运行过）。回滚命令："
-    echo "   docker compose -f $REMOTE_DIR/docker-compose.yml -f $REL/rollback.override.yml up -d backend frontend"
+    if [ "$GALLERY_REVIEW" = 1 ]; then echo "   STOP: keep lock; commit and verify persistent gallery freeze BEFORE any old application rollback"; else echo "   docker compose -f $REMOTE_DIR/docker-compose.yml -f $REL/rollback.override.yml up -d backend frontend"; fi
     exit 1
   fi
   echo "    启动脚本 SQL 迁移：未运行（CMD=$ACTUAL_CMD）"
-  echo "STARTUP_MIGRATIONS=skipped-code-only" >> "$REL/RELEASE.txt"
+  if [ "$GALLERY_REVIEW" = 1 ]; then echo "STARTUP_MIGRATIONS=skipped-gallery-exact" >> "$REL/RELEASE.txt"; else echo "STARTUP_MIGRATIONS=skipped-code-only" >> "$REL/RELEASE.txt"; fi
 else
   echo "    启动脚本 SQL 迁移：执行 $(echo "$L" | grep -c '^执行迁移' || true) 跳过 $(echo "$L" | grep -c '跳过已执行' || true) 失败 $(echo "$L" | grep -c '执行失败' || true)"
 fi
 docker ps --format '    {{.Names}}  {{.Image}}  {{.Status}}' | grep ai-platform
 echo "REMOTE_HEALTHY=1" >> "$REL/RELEASE.txt"
 echo "FINAL_STATUS=RELEASED" >> "$REL/RELEASE.txt"
+[ "$GALLERY_REVIEW" != 1 ] || ln -sfn "$REL" /var/backups/ai-platform/releases/current
 
 if [ "$CODE_ONLY" = 1 ] || [ "$KEEP_HISTORY" = 1 ]; then
   # 只跳过清理，不改保留份数：下一次常规发布照常按 KEEP/KEEP_DB 收回。
@@ -522,3 +571,5 @@ TAG="deploy-docker-$(date +%Y%m%d_%H%M%S)"
 git tag -a "$TAG" -m "deploy $LOCAL_SHORT to $SSH_HOST (docker$([ "$MODE" = prebuilt ] && echo ", prebuilt $TASK"))"
 git push -q origin "$TAG" 2>/dev/null || echo "⚠ tag 推送失败（本地已打 $TAG）"
 echo "✅ Docker 发布完成，已打标签 $TAG"
+
+GALLERY_REMOTE_DONE=1

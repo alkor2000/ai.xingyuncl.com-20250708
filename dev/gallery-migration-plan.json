@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "business_candidate": "3079f1259cf042a3b48c6609d4ccfcd5353f246d",
+  "migrations": [
+    {
+      "name": "20261105_001_image_safety.js",
+      "sha256": "6fa42b6ef21030ac1903bd3cdc73d7ef47feb0d153d0c177bb188dc74b33ea8b"
+    },
+    {
+      "name": "20261106_001_gallery_teacher_review.js",
+      "sha256": "d1a81ba801f7535dba61fd8589b54341c21ec96eba6aff050f31b4e19d3eb8a7"
+    },
+    {
+      "name": "20261106_002_video_teacher_review.js",
+      "sha256": "d546115acbbaee816e4d83f603707ce3d43a7d9719d7f043f28b7021a9b70933"
+    },
+    {
+      "name": "20261110_001_gallery_reports_visibility.js",
+      "sha256": "634b3fb30cb5083f04e864623c7c460612032c354aca969883bf550c4162944c"
+    },
+    {
+      "name": "20261110_002_gallery_machine_review.js",
+      "sha256": "50de65c8238b4ee865096a7456ba42cf5daadbaff8775948747520993e1c0785"
+    },
+    {
+      "name": "20261110_003_gallery_rollback_guard.js",
+      "sha256": "3f2398291e71e343504fcf6b2fed934f5cf17e76c101933308247334d36bd312"
+    }
+  ],
+  "profiles": {
+    "teacher-review": [
+      "20261105_001_image_safety.js",
+      "20261106_001_gallery_teacher_review.js",
+      "20261106_002_video_teacher_review.js"
+    ],
+    "gallery-review": [
+      "20261110_001_gallery_reports_visibility.js",
+      "20261110_002_gallery_machine_review.js",
+      "20261110_003_gallery_rollback_guard.js"
+    ],
+    "gallery-pku": [
+      "20261105_001_image_safety.js",
+      "20261106_001_gallery_teacher_review.js",
+      "20261106_002_video_teacher_review.js",
+      "20261110_001_gallery_reports_visibility.js",
+      "20261110_002_gallery_machine_review.js",
+      "20261110_003_gallery_rollback_guard.js"
+    ]
+  },
+  "historical_public": {
+    "image": [
+      22493,
+      22581
+    ],
+    "video": [
+      11795,
+      11796,
+      11812,
+      11941
+    ]
+  }
+}

@@ -58,8 +58,8 @@ fi
 LOCAL_SHA=$(git rev-parse --short HEAD)
 TARGET_FULL=$(git rev-parse HEAD)
 STAGE="/var/backups/ai-platform/releases/migration-$TARGET_FULL"
-STAGE_HELPER_SHA=""
-if [ "$PREPARED_MIGRATIONS" = 1 ]; then STAGE_HELPER_SHA=$(sha256sum "$ROOT/dev/migration-stage.cjs" | cut -d' ' -f1); fi
+STAGE_HELPER_SHA=""; STAGE_PLAN_SHA=""; STAGE_VERIFY_SHA=""
+if [ "$PREPARED_MIGRATIONS" = 1 ]; then STAGE_HELPER_SHA=$(sha256sum "$ROOT/dev/migration-stage.cjs" | cut -d' ' -f1); STAGE_PLAN_SHA=$(sha256sum "$ROOT/dev/gallery-migration-plan.json" | cut -d' ' -f1); STAGE_VERIFY_SHA=$(sha256sum "$ROOT/dev/gallery-migrate.cjs" | cut -d' ' -f1); fi
 REMOTE_SHA=$(ssh -n -o BatchMode=yes "$SSH_HOST" "cd $REMOTE_DIR && git rev-parse --short HEAD")
 git merge-base --is-ancestor "$REMOTE_SHA" HEAD || { echo "❌ 首站提交不是本地 HEAD 的祖先，中止。"; exit 1; }
 if [ "$CODE_ONLY" = 1 ]; then
@@ -78,7 +78,7 @@ echo "  变更文件:"
 git --no-pager diff --stat "$REMOTE_SHA..$LOCAL_SHA" 2>/dev/null | tail -1 | sed 's/^/    /' || true
 if git --no-pager diff --name-only "$REMOTE_SHA..$LOCAL_SHA" 2>/dev/null | grep -q '^backend/migrations/'; then
   if [ "$PREPARED_MIGRATIONS" = 1 ]; then
-    echo "  迁移要求: 三项预置迁移必须已有匹配本候选的成功回执；应用切换前再次校验"
+    echo "  迁移要求: 所选精确清单预置迁移必须已有匹配本候选的成功回执；应用切换前再次校验"
   else
     echo "  ⚠ 本次含 knex 迁移文件：rebuild.sh 不跑迁移；加法迁移须先完成，不得发布后补迁移"
   fi
@@ -171,6 +171,8 @@ if ! git merge-base --is-ancestor HEAD \$TARGET; then
 fi
 if [ "$PREPARED_MIGRATIONS" = 1 ]; then
   [ "\$(sha256sum '$STAGE/migration-stage.cjs' | cut -d' ' -f1)" = "$STAGE_HELPER_SHA" ] || { echo 'STOP: staged verifier bytes changed'; exit 1; }
+  [ "\$(sha256sum '$STAGE/gallery-migration-plan.json' | cut -d' ' -f1)" = "$STAGE_PLAN_SHA" ] || { echo 'STOP: staged plan bytes changed'; exit 1; }
+  [ "\$(sha256sum '$STAGE/gallery-migrate.cjs' | cut -d' ' -f1)" = "$STAGE_VERIFY_SHA" ] || { echo 'STOP: staged database verifier bytes changed'; exit 1; }
   node "$STAGE/migration-stage.cjs" verify-completed "$REMOTE_DIR" "$TARGET_FULL" "$STAGE" || exit 1
 elif [ -n "\$(git status --porcelain)" ]; then
   echo "❌ 服务器工作区不干净（有人直接改了生产文件），中止："; git status --short | head -20; exit 1
