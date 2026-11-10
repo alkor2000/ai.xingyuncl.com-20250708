@@ -1,4 +1,4 @@
-import api from '../../../../utils/api';
+import GalleryReportButton from '../../../../components/common/GalleryReportButton';
 import ProtectedImage from '../../../../components/common/ProtectedImage';
 /**
  * 图片卡片组件
@@ -36,7 +36,7 @@ import ProtectedImage from '../../../../components/common/ProtectedImage';
  */
 
 import React, { memo, useCallback, useState } from 'react';
-import { Card, Button, Space, Tooltip, Tag, Image, Spin, Progress, Popconfirm, Modal, Input, message } from 'antd';
+import { Card, Button, Space, Tooltip, Tag, Image, Spin, Progress, Popconfirm, message } from 'antd';
 import {
   EyeOutlined,
   DownloadOutlined,
@@ -90,6 +90,7 @@ const ImageCard = memo(({
   const [isExpanded, setIsExpanded] = useState(false);
   /* 下载进行中：按钮转圈并禁用，避免连点造成重复下载 */
   const [downloading, setDownloading] = useState(false);
+  const [hiddenByReport, setHiddenByReport] = useState(false);
 
   const galleryPending = item.gallery_status === 'pending';
   const isMj = item.provider === 'midjourney';
@@ -151,6 +152,7 @@ const ImageCard = memo(({
     ? new Date(item.created_at).toLocaleString(i18n.language)
     : '';
 
+  if (hiddenByReport) return null;
   return (
     <Card
       className={`history-card ${isMj ? 'midjourney-card' : ''} ${isFailed ? 'failed-card' : ''}`}
@@ -212,18 +214,7 @@ const ImageCard = memo(({
               />
               <div className="image-overlay">
                 <Space>
-                  {item.username && <Button type="text" onClick={e => {
-                    e.stopPropagation();
-                    let reason = '';
-                    Modal.confirm({ title: t('image.moderation.report'),
-                      content: <Input.TextArea maxLength={500} placeholder={t('image.moderation.reportReason')} onChange={event => { reason = event.target.value; }} />,
-                      onOk: async () => {
-                        if (!reason.trim()) throw new Error(t('image.moderation.reportReason'));
-                        await api.post(`/image/generation/${item.id}/report`, { reason });
-                        message.success(t('image.moderation.reportSent'));
-                      }
-                    });
-                  }}>{t('image.moderation.report')}</Button>}
+                  {isGallery && !isOwner && <GalleryReportButton media="image" id={item.id} onHidden={() => setHiddenByReport(true)} />}
                   <Tooltip title={t('image.viewLarge')}>
                     <Button
                       type="text"
@@ -388,6 +379,7 @@ const ImageCard = memo(({
                 <span>{t('image.creditsConsumed', { credits: item.credits_consumed })}</span>
               )}
               {isOwner && item.gallery_status && item.gallery_status !== 'private' && <Tag>{t(`image.galleryReview.${item.gallery_status}`)}</Tag>}
+              {isOwner && item.gallery_reason && <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{t('image.galleryReview.ownerReason')}{item.gallery_reason}</p>}
               {item.is_public && <Tag color="green">{t('status.public')}</Tag>}
               {item.is_favorite && isOwner && <Tag color="red">{t('status.favorited')}</Tag>}
               {isGallery && item.view_count !== undefined && (

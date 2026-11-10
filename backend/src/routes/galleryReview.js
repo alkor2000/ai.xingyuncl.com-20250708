@@ -9,13 +9,19 @@ const handle = fn => async (req, res) => {
 const ok = (res, data) => res.json({ success: true, data });
 router.use(limited);
 router.get('/', handle(async (req, res) => {
-  const state = ['pending', 'approved', 'rejected'].includes(req.query.state) ? req.query.state : 'pending';
+  const state = ['pending', 'approved', 'rejected', 'removed', 'reported'].includes(req.query.state) ? req.query.state : 'pending';
   const page = Math.max(1, Math.min(100000, Number.parseInt(req.query.page) || 1));
   ok(res, await review.list(req.user, state, page));
 }));
 router.get('/:id/asset', handle(async (req, res) => {
   const bytes = await safety.asset(req.params.id, req.user, false, 'teacher');
   res.set({ 'Cache-Control': 'private, no-store', 'Content-Type': 'image/jpeg', 'X-Content-Type-Options': 'nosniff' }).send(bytes);
+}));
+router.get('/:id/events', handle(async (req, res) => {
+  ok(res, await require('../services/galleryModerationService').history('image', req.params.id, req.user));
+}));
+router.post('/:id/visibility', handle(async (req, res) => {
+  ok(res, await require('../services/galleryModerationService').visibility('image', req.params.id, req.user, req.body));
 }));
 router.post('/:id/import', handle(async (req, res) => {
   await review.authorize(req.params.id, req.user);

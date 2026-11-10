@@ -1,5 +1,4 @@
 const router = require('express').Router();
-const db = require('../database/connection');
 const safety = require('../services/videoSafetyService');
 const { scope } = require('../services/galleryReviewService');
 const handle = fn => async (req, res) => {
@@ -10,18 +9,22 @@ const ok = (res, data) => res.json({ success: true, data });
 const send = (res, file) => res.sendFile(file, { acceptRanges: true, lastModified: false, cacheControl: false,
   headers: { 'Content-Type': 'video/mp4', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } });
 router.get('/generation/:id/asset', handle(async (req, res) => send(res, await safety.asset(req.params.id, req.user))));
+router.post('/generation/:id/report', require('express-rate-limit')({ windowMs: 60000, max: 20, keyGenerator: req => String(req.user.id), standardHeaders: true, legacyHeaders: false }), handle(async (req, res) => {
+  ok(res, await require('../services/galleryModerationService').report('video', req.params.id, req.user, req.body));
+}));
 router.use('/gallery-review', (req, res, next) => { try { scope(req.user); next(); } catch { res.status(403).json({ success: false, message: '仅审核老师可以操作' }); } });
 router.use('/gallery-review', require('express-rate-limit')({ windowMs: 60000, max: 60, keyGenerator: req => String(req.user.id), standardHeaders: true, legacyHeaders: false }));
 router.get('/gallery-review', handle(async (req, res) => {
-  const state = ['pending','approved','rejected'].includes(req.query.state) ? req.query.state : 'pending';
+  const state = ['pending','approved','rejected','removed','reported'].includes(req.query.state) ? req.query.state : 'pending';
   const page = Math.max(1, Math.min(100000, Number.parseInt(req.query.page) || 1));
   ok(res, await safety.list(req.user, state, page));
 }));
 router.get('/gallery-review/:id/asset', handle(async (req, res) => send(res, await safety.asset(req.params.id, req.user, true))));
 router.get('/gallery-review/:id/events', handle(async (req, res) => {
-  await safety.authorize(req.params.id, req.user);
-  const { rows } = await db.query('SELECT actor_id,action,state,reason,created_at FROM video_safety_events WHERE generation_id=? ORDER BY id DESC LIMIT 100', [req.params.id]);
-  ok(res, rows);
+  ok(res, await require('../services/galleryModerationService').history('video', req.params.id, req.user));
+}));
+router.post('/gallery-review/:id/visibility', handle(async (req, res) => {
+  ok(res, await require('../services/galleryModerationService').visibility('video', req.params.id, req.user, req.body));
 }));
 router.post('/gallery-review/:id/import', handle(async (req, res) => {
   await safety.authorize(req.params.id, req.user);

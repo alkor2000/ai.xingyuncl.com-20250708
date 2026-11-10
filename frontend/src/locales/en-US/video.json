@@ -128,7 +128,7 @@
   "video.studio.noVideoYet": "No video yet",
   "video.studio.fullscreen": "Fullscreen",
   "video.galleryReview.title": "Video gallery · teacher review",
-  "video.galleryReview.policy": "Review the entire video, including visuals, audio, captions and prompt before publication. Reject sexual content, feces or coprophagia, insults and targeted humiliation. A cover image is insufficient; no self-review.",
+  "video.galleryReview.policy": "Human review is required before publication: check sexual content, violence, deliberate disgust, degrading or discriminatory content, political sensitivity and content unsuitable for minors. Maps and boundaries require verification of the official source and approval identifier. Machine approval does not replace human review; no self-review. Watch the entire video, including audio and captions, not only its cover.",
   "video.galleryReview.pending": "Awaiting teacher review",
   "video.galleryReview.approved": "Teacher approved",
   "video.galleryReview.rejected": "Teacher rejected",
@@ -140,5 +140,9 @@
   "video.galleryReview.reject": "Reject and block",
   "video.safety.held": "Video awaiting teacher review or blocked; playback and sharing unavailable",
   "video.safety.load": "Load and play video",
-  "video.safety.unavailable": "Video unavailable or failed to load"
+  "video.safety.unavailable": "Video unavailable or failed to load",
+  "video.galleryReview.removed": "Taken down",
+  "video.galleryReview.reported": "Reported — awaiting review",
+  "video.galleryReview.takedown": "Take down",
+  "video.galleryReview.restore": "Restore after review"
 }

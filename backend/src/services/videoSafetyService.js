@@ -60,6 +60,7 @@ async function project(value) {
   const out = { ...value };
   if (out.id && ('local_path' in out || 'video_url' in out)) {
     const current = await get(out.id);
+    out.gallery_reason = current.gallery_state === 'approved' ? null : current.gallery_reason || null;
     out.moderation_status = current.state; out.gallery_status = current.gallery_state; out.moderation_revision = current.revision;
     out.local_path = current.state === 'pass' && current.file_key ? `/api/video/generation/${out.id}/asset` : null;
     for (const key of rawFields) out[key] = null;
@@ -75,6 +76,7 @@ async function publish(id, userId) {
     await query('INSERT IGNORE INTO video_safety (generation_id) VALUES (?)', [id]);
     const { rows: states } = await query('SELECT * FROM video_safety WHERE generation_id=? FOR UPDATE', [id]);
     const current = states[0], cancel = rows[0].is_public || current.gallery_state === 'pending';
+    if (['removed', 'reported'].includes(current.gallery_state)) throw error('作品已暂时下架，须由管理员复核后恢复', 409);
     if (!cancel) {
       const { rows: limits } = await query('SELECT restricted FROM image_safety_restrictions WHERE user_id=? FOR UPDATE', [userId]);
       if (rows[0].status !== 'succeeded' || current.state === 'block' || limits[0]?.restricted) throw error('视频未通过安全审核，不能提交公开申请');
@@ -102,7 +104,7 @@ async function decide(id, user, state, reason, revision) {
     const { rows } = await query('SELECT * FROM video_safety WHERE generation_id=? FOR UPDATE', [id]);
     const current = rows[0], approved = state === 'approved';
     if (!current || current.revision !== revision) throw error('视频已变更，请刷新后重新审核', 409);
-    if (current.gallery_state !== 'pending' && !(current.gallery_state === 'approved' && !approved)) throw error('视频已撤回或已审核', 409);
+    if (current.gallery_state !== 'pending' && !(['approved','removed','reported'].includes(current.gallery_state) && !approved)) throw error('视频已撤回或已审核', 409);
     if (approved) {
       if (!current.file_key || generation.status !== 'succeeded') throw error('请先导入并完整检查视频', 409);
       const { rows: limits } = await query('SELECT restricted FROM image_safety_restrictions WHERE user_id=? FOR UPDATE', [generation.user_id]);
@@ -110,19 +112,21 @@ async function decide(id, user, state, reason, revision) {
       if (limits[0]?.restricted || current.state === 'block' || blocked.length) throw error('已拦截的视频不能公开', 409);
       await store.verify(current.file_key, current.sha256).catch(() => { throw error('视频校验失败', 409); });
     }
-    await query('UPDATE video_safety SET state=?,gallery_state=?,reviewer_id=?,reviewed_at=NOW(),revision=revision+1,updated_at=NOW() WHERE generation_id=?', [approved ? 'pass' : 'block', state, user.id, id]);
+    await query('UPDATE video_safety SET state=?,gallery_state=?,reviewer_id=?,reviewed_at=NOW(),gallery_reason=?,revision=revision+1,updated_at=NOW() WHERE generation_id=?', [approved ? 'pass' : 'block', state, user.id, reason.trim(), id]);
     await query('UPDATE video_generations SET is_public=?,gallery_approved_by=? WHERE id=?', [approved ? 1 : 0, approved ? user.id : null, id]);
     await event(query, id, user.id, 'gallery_decision', state, reason.trim(), current.sha256);
     return { is_public: approved ? 1 : 0, gallery_status: state };
   });
 }
 async function list(user, state, page) {
-  const s = scope(user), params = [...s.params, user.id, state];
+  const s = scope(user), reported = state === 'reported';
+  const filter = reported ? "(s.gallery_state='reported' OR (s.gallery_state='approved' AND EXISTS (SELECT 1 FROM video_safety_reports r WHERE r.generation_id=s.generation_id AND r.resolved_at IS NULL)))" : 's.gallery_state=?';
+  const params = [...s.params, user.id, ...(reported ? [] : [state])];
   const from = `FROM video_generations vg JOIN users u ON u.id=vg.user_id JOIN video_safety s ON s.generation_id=vg.id
-    WHERE ${s.sql} AND vg.user_id<>? AND s.gallery_state=?`;
+    WHERE ${s.sql} AND vg.user_id<>? AND ${filter}`;
   const { rows: count } = await db.query(`SELECT COUNT(*) total ${from}`, params);
   const { rows } = await db.simpleQuery(`SELECT vg.id,vg.user_id,u.username,vg.prompt,vg.negative_prompt,s.state moderation_status,
-    s.gallery_state,s.revision,s.file_key IS NOT NULL has_asset,s.reviewer_id,s.reviewed_at ${from} ORDER BY s.requested_at,vg.id LIMIT 30 OFFSET ?`, [...params, (page - 1) * 30]);
+    s.gallery_state,s.revision,s.gallery_reason,(SELECT COUNT(*) FROM video_safety_reports r WHERE r.generation_id=s.generation_id AND r.resolved_at IS NULL) reports,s.file_key IS NOT NULL has_asset,s.reviewer_id,s.reviewed_at ${from} ORDER BY s.requested_at,vg.id LIMIT 30 OFFSET ?`, [...params, (page - 1) * 30]);
   return { data: rows, total: count[0].total, page };
 }
 module.exports = { get, capture, fromUrl, framesForProvider, project, publish, authorize, asset, decide, list, event };

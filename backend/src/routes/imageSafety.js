@@ -21,15 +21,7 @@ router.get('/reference/:id', handle(async (req, res) => {
   res.set({ 'Cache-Control': 'private, no-store', 'Content-Type': 'image/jpeg', 'X-Content-Type-Options': 'nosniff' }).send(buffer);
 }));
 router.post('/generation/:id/report', limited, handle(async (req, res) => {
-  const reason = req.body.reason;
-  if (typeof reason !== 'string' || !reason.trim() || reason.length > 500) throw safety.error('请填写举报原因（最多500字）', 400);
-  await db.transaction(async query => {
-    const { rows } = await query('SELECT id FROM image_generations WHERE id=? AND is_public=1 FOR UPDATE', [req.params.id]);
-    if (!rows.length) throw safety.error('记录不存在', 404);
-    await query('INSERT IGNORE INTO image_safety_reports (generation_id,user_id,reason) VALUES (?,?,?)', [req.params.id, req.user.id, reason.trim()]);
-    // Reports enter a human queue; accusations alone never restrict an account.
-  });
-  ok(res, { reported: true });
+  ok(res, await require('../services/galleryModerationService').report('image', req.params.id, req.user, req.body));
 }));
 router.use('/admin/moderation', requireSuperAdmin());
 router.get('/admin/moderation', handle(async (req, res) => {

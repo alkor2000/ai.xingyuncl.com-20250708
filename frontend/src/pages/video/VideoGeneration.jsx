@@ -35,6 +35,7 @@ import useVideoStore from '../../stores/videoStore';
 import useAuthStore from '../../stores/authStore';
 import ProtectedVideo, { downloadProtectedVideo } from '../../components/common/ProtectedVideo';
 import ProtectedImage from '../../components/common/ProtectedImage';
+import GalleryReportButton from '../../components/common/GalleryReportButton';
 import apiClient from '../../utils/api';
 import { mergeTurnItems } from './utils/mergeTurnItems';
 import './VideoGeneration.less';
@@ -596,7 +597,9 @@ const VideoGeneration = () => {
                 </Tooltip>
               </div>
               <div className="meta-info">
+                {isGallery && !isOwner && <GalleryReportButton media="video" id={item.id} onHidden={() => getPublicGallery({ page: galleryPagination.page, limit: galleryPagination.limit })} />}
                 {isGallery && item.username && (<span>{item.username}</span>)}
+                {isOwner && item.gallery_reason && <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{t('image.galleryReview.ownerReason')}{item.gallery_reason}</p>}
                 <span>{new Date(item.created_at).toLocaleString()}</span>
                 {item.credits_consumed !== undefined && (
                   <span>{t('video.credits', { credits: item.credits_consumed })}</span>

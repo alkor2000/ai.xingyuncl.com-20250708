@@ -77,6 +77,7 @@ async function project(value) {
     const safety = await get(out.id);
     out.moderation_status = safety.state;
     out.gallery_status = safety.gallery_state || 'private';
+    out.gallery_reason = safety.gallery_state === 'approved' ? null : safety.gallery_reason || null;
     out.moderation_reason = safety.reason;
     out.local_path = safety.state === 'pass' && safety.file_key ? `/api/image/generation/${out.id}/asset` : null;
     out.thumbnail_path = out.local_path ? `${out.local_path}?thumbnail=1` : null;
@@ -94,6 +95,7 @@ async function publish(id, userId) {
     await query('INSERT IGNORE INTO image_safety (generation_id) VALUES (?)', [id]);
     const { rows: decisions } = await query('SELECT * FROM image_safety WHERE generation_id=? FOR UPDATE', [id]);
     const current = decisions[0];
+    if (['removed', 'reported'].includes(current.gallery_state)) throw error('作品已暂时下架，须由管理员复核后恢复', 409);
     const cancel = rows[0].is_public || current.gallery_state === 'pending';
     if (!cancel) {
       const { rows: restriction } = await query('SELECT restricted FROM image_safety_restrictions WHERE user_id=? FOR UPDATE', [userId]);

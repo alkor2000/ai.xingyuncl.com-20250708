@@ -128,7 +128,7 @@
   "video.studio.noVideoYet": "还没有视频",
   "video.studio.fullscreen": "全屏看",
   "video.galleryReview.title": "视频画廊 · 老师审核",
-  "video.galleryReview.policy": "视频必须由老师完整审核画面、声音、字幕及提示词，才能公开。禁止色情裸露、粪便与食粪等恶心内容、辱骂和针对他人的羞辱；不能只看封面，不能自审。",
+  "video.galleryReview.policy": "公开前须逐件人工审核色情、暴力、低俗恶心、侮辱歧视、政治敏感和未成年人不宜内容；地图与疆界须核验标准地图来源和审图号。机器通过不能代替人工审核，不能自审。视频须完整检查画面、声音和字幕，不能只看封面。",
   "video.galleryReview.pending": "待老师审核",
   "video.galleryReview.approved": "老师已通过",
   "video.galleryReview.rejected": "老师已驳回",
@@ -140,5 +140,9 @@
   "video.galleryReview.reject": "驳回并屏蔽",
   "video.safety.held": "视频待老师审核或已屏蔽，暂不可播放和分享",
   "video.safety.load": "加载并播放视频",
-  "video.safety.unavailable": "视频不可访问或加载失败"
+  "video.safety.unavailable": "视频不可访问或加载失败",
+  "video.galleryReview.removed": "已下架",
+  "video.galleryReview.reported": "举报待复核",
+  "video.galleryReview.takedown": "下架",
+  "video.galleryReview.restore": "复核后恢复公开"
 }
