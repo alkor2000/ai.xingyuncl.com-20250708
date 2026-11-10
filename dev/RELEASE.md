@@ -116,18 +116,25 @@ make deploy
 
 ## 六、出问题了怎么退
 
-**代码回滚**（退到上一个部署 tag）：
+**安全回退口径（总控已确认）**：11-05/06/10的六张画廊迁移有意拒绝单独`down`。回退保留结构、审核/举报/机器证据、控制审计与数据库守卫，先冻结新增公开、批准与恢复，再退应用。不恢复未经审查的公开状态。这避免旧应用重提/批准机器拒绝作品，以及删除已经形成的审核证据；逐张up或备份恢复均不等于逐张down。
+
+**旧入口已禁用**：`make rollback`和`make rollback-docker`立即非零退出，不连接生产、不输出直接切旧应用的命令。所有模式的失败提示统一指向具名安全流程；不得从历史文档复制`git checkout + rebuild`或裸`compose up`绕过冻结。
+
+**唯一具名流程**是`dev/gallery-safe-rollback.sh`，在对应服务器已复核的候选检出中执行。先核原发布命令已确定结束、运行父版/回退目标和本次批准；不知道原任务是否仍运行时不能接管。使用原操作者的原生锁token；若锁未持有才取得同一把锁，绝不抢锁或解锁其他发布。
+
+1. 核回退目标及工具源码。星云父版必须绑定PREPARED回执；北大旧镜像来自该候选发布目录的rollback文件，固定其摘要及镜像ID，禁止旧容器启动额外SQL迁移。
+2. 使用`gallery-freeze-gate.cjs`事务提交`frozen=1`和对应控制审计。事务提交后重新查MySQL身份、两个CHECK、**八守卫完整定义**、控制状态和最新审计ID/批准引用/理由，写持久FREEZE-VERIFIED回执。只在再次实时回读成功后才允许切旧代码/镜像；不是只看CLI打印或一份旧回执。
+3. 应用回退后核健康、镜像身份并再次核冻结/审计。全部成功才释放自己的锁；任一步失败或结果不明则停住、保留锁及冻结，不自动重试、解冻或恢复公开。回退可能让附带公开记录写入受限，不能承诺无感。
+4. 后续重新发布前必须重建具名运行父版绑定；不能把回退前的current发布记录当成当前运行版本。PM2处于明确父版的detached HEAD时，不自动切main或revert，先按新候选复核。
+
+以下是**供已批准发布操作者审阅的服务器命令格式**，占位符必须用本次封存值替换；不要求产品负责人自行运行。若产品负责人手动操作，先在终端输入`wsl`回车，提示符变成`hanying@…$`后，再通过WSL中的SSH别名进入对应服务器；不是在PowerShell执行Bash。在服务器`/var/www/ai-platform`中：
 
 ```bash
-git tag -l 'deploy-*' | tail -3                       # 找上一个 tag
-ssh practice 'cd /var/www/ai-platform && git checkout <上一个deploy-tag> && export NVM_DIR=$HOME/.nvm && . $NVM_DIR/nvm.sh && bash rebuild.sh --full'
-# 退完记得在本地把 main 也 revert 掉，否则下次 ff-only 合并会被服务器的 detached HEAD 拦住：
-#   ssh practice 'cd /var/www/ai-platform && git checkout main'  →  本地 git revert → make deploy
+bash dev/gallery-safe-rollback.sh docker <本次候选发布目录> recorded-images <真实批准引用> <自己的原生锁token>
+bash dev/gallery-safe-rollback.sh pm2 <本次migration阶段目录> <回执绑定的完整父版SHA> <真实批准引用> <自己的原生锁token>
 ```
 
-**数据库回滚**：从 `/var/backups/ai-platform/mysql/` 最近的 dump 恢复（`make rollback` 会列出）。加法式迁移通常不用回滚。
-
-**判断先退哪个**：先回滚代码止血，再看数据库。
+本流程不自动恢复数据库dump。恢复库可能覆盖新业务并恢复旧公开状态，必须另做具名数据恢复评估及批准；不得作为六张迁移down的替代捷径。
 
 ---
 
@@ -155,7 +162,7 @@ make deploy-docker
 2. `make build-images`：工作区干净、在 main、HEAD 已推 GitHub（与 deploy-docker 同一口径）→ 构建主机资源门（默认 ≥ 8 GiB 磁盘、≥ 4864 MiB 可用内存、≥ 100000 inode；4864 = 实测 cgroup 峰值 3789 + 1024 预留，2026-10-14 总控登记值）→ `git archive HEAD` 送到构建主机专属任务目录 `/var/tmp/ai-platform-image-build/v-<短sha>-<时间戳>/src`（只含已提交文件，不碰 `/var/www/ai-platform` 的 PM2 业务目录，不读任何 `.env`）→ 依次 `docker build` backend、frontend（标签与发布标签同形 `ai-platform-{backend,frontend}:v-<短sha>-<时间戳>`；frontend 只带一个构建参数 `CUSTOMER_DOMAIN=<北大域名>`，取自 `DOCKER_HEALTH_URL` 的主机名；默认用旧构建器 `DOCKER_BUILDKIT=0`，每步 `--memory=4608m --memory-swap=4608m --cpu-shares=256`，不让构建把构建主机的既有服务挤出内存；BuildKit 没有逐次构建的内存上限，`IMAGE_BUILD_BUILDER=buildkit` 时只靠资源门）→ `docker save | gzip` → 清单（源码提交与树、Dockerfile/依赖锁/compose/.dockerignore 摘要、构建参数、构建主机平台与 Docker 版本、基础镜像 ID 与 RepoDigests、两镜像 ID/大小/平台、tar 摘要与大小）→ scp 取回 `~/ai-platform-images/<任务>/`，本机核对摘要 → 删除构建主机上的任务目录与两个任务标签（只删这两个标签，不 prune；`--keep-remote` 保留）。镜像里没有任何运行配置或凭据：`CUSTOMER_DOMAIN` 之外的一切都由北大的 compose 在运行时注入。
 3. `make deploy-docker ARGS=--prebuilt=<包目录>`：本地先核包——tar 摘要、`SOURCE_COMMIT` 必须等于本地 HEAD（错提交拒绝）、`CUSTOMER_DOMAIN_BUILD_ARG` 必须等于站点域名——再做与现场构建相同的本地检查和星云顺序检查；远端探测平台（与清单 `IMAGE_PLATFORM` 不同即拒绝，错架构不加载）；服务器检出里若有会被 Dockerfile COPY 进镜像的未跟踪文件即拒绝并列出——预构建镜像里不可能有它们，现场构建却会带上，不能让它们在切换时消失。compose 里以 `./` 挂载进容器的宿主目录不算（由挂载提供，与镜像来源无关）：北大的门户页 `frontend/public/www/` 就是这样处理的，本次把它从"靠现场构建拷进镜像"改成 `docker-compose.yml` 里只读挂载到 nginx 根下同一路径 `/usr/share/nginx/html/www`，现场构建与预构建都能提供 `/www/`；检出根目录下的 `reload-nginx-docker.sh`、`backup_*.html` 和 `docker/*.backup_b` 不在任何 COPY 范围内，不算；预览、人工确认；拿发布锁；资源门按这条路径拆分：磁盘 ≥ tar 大小 + 两镜像大小 + 2 GiB（库备份约 0.4 GB、发布目录与日志、1 GiB 底）、可用内存 ≥ 1024 MiB（迁移一次性容器与新旧容器交接约 150–300 MiB，取两倍再取整；`DOCKER_PREBUILT_MIN_AVAILABLE_MIB` 可调）、inode ≥ 100000；不再有编译门。传码（bundle，同现场路径）；传包：先写到 `/var/tmp/ai-platform-images/<任务>/images.tar.gz.part`，服务器核对摘要通过才改成正式名，不符就删掉中止；已有摘要一致的正式包则直接复用（中断后重跑幂等）。服务器：再核摘要 → `docker load` → 逐个核对加载出的镜像 ID、平台与清单一致、frontend 镜像里的 `CUSTOMER_DOMAIN` 等于服务器 `.env` 里的值，不一致就删掉刚加载的标签并中止（**校验前不切换、不迁移；校验通过只表示镜像在本地，不表示业务已上线**）→ 之后与现场路径完全相同：rollback 标签、发布目录与 override、RELEASE.txt（多了 `IMAGES_SOURCE=prebuilt`、包摘要、镜像 ID、构建主机平台，`IMAGES_LOADED=1` 在切换之前落盘）、备份库、迁移、切换、健康判定、清理；成功后删除服务器上的包目录。**这条路径里服务器永远不会 `docker compose build`**：包有问题就停，不回退到现场构建。
 4. 发布锁：两种模式都先在 `/var/backups/ai-platform/releases/.lock` 原子 mkdir（`dev/docker-release-lock.sh`），锁里记 token/时间/主机；已被占用即拒绝并打印持有者，脚本不抢锁、不清锁。远端脚本退出时释放。发布中途断线留下的残留锁要由人核实（`ssh pkuailab 'cat /var/backups/ai-platform/releases/.lock/owner; docker ps'`，确认没有发布在跑）后手工 `rmdir`。
-5. 回退与现场路径相同（`current/rollback.override.yml`，见上）。同一提交的双容器已运行目标镜像且健康时仍直接跳过。Git HEAD 不代表运行中的镜像，判定一律以容器实际镜像 ID 与健康为准。
+5. 回退统一走第六节冻结门；rollback.override.yml只是目标记录，不能单独执行。同一提交的双容器已运行目标镜像且健康时仍直接跳过。Git HEAD 不代表运行中的镜像，判定一律以容器实际镜像 ID 与健康为准。
 6. 工具变更的上线顺序不变：含这些脚本的提交先 `make deploy ARGS=--server-first`（星云 + GitHub），再 `make build-images`，再 `make deploy-docker ARGS=--prebuilt=…`；不用 `--allow-ahead` 跳过顺序检查。构建主机的真实 Docker 能力、镜像仓库可达性与一次生产演练在写下这段时都还没有做过，以 `--precheck` 的实际输出为准。
 
 **纯代码发布（`--code-only`，对应发布类型 A）**：常规路径会无条件跑 knex（第 4 步）、容器启动时跑 SQL 迁移脚本、切换后清理旧镜像和旧库备份（第 6 步）；星云的备份门也按 `KEEP=14` 滚动删除。只改代码的发布可以不碰这些：
@@ -167,20 +174,14 @@ make deploy-docker ARGS="--prebuilt=<包目录> --code-only"
 ```
 
 1. **范围门**：差量含 `backend/migrations/`、`backend/knexfile.js`、`database/`、`tools/database-upgrade/`、`docker/`、`docker-compose.yml` 中任一路径即拒绝，改走常规发布。Docker 站点的差量基准是 `docker-release-preflight.sh sealed-parent` 读到的运行中封存父版（`current` 发布记录、镜像清单、两个运行容器必须是同一份且健康），不是服务器 Git HEAD；读不到或对不上就拒绝，这一步在拿锁和传任何东西之前；拿到锁后、传码传包之前再读一次，完整提交和两个镜像 ID 变了就停。`--code-only` 只能配 `--prebuilt`。目标镜像加载后还要核它的 CMD 就是已知那一份，不符就删掉刚加载的两个标签并中止，不备份、不切换。
-2. **不做的事**：不跑 `knex migrate:latest`；容器启动不跑 `run-migrations.sh`（`release.override.yml` 与 `rollback.override.yml` 给 backend 写 `command: ["su-exec", "nodejs", "node", "src/server.js"]`，只替换 CMD、镜像字节不变，切换后核 `Config.Cmd` 与日志，不符即按失败处理并打印回滚命令）；不清理旧镜像和旧库备份；星云备份门带 `BACKUP_RETENTION=skip`，只新增、不删旧备份；星云 `rebuild.sh` 带 `REBUILD_KEEP_LOGS=1`，不清 PM2 与 auth/frontend 的历史日志。保留份数的配置不动，下一次常规发布照常收回。
+2. **不做的事**：不跑 `knex migrate:latest`；容器启动不跑 `run-migrations.sh`（`release.override.yml` 与 `rollback.override.yml` 给 backend 写 `command: ["su-exec", "nodejs", "node", "src/server.js"]`，只替换 CMD、镜像字节不变，切换后核 `Config.Cmd` 与日志，不符即停止并提示第六节安全回退流程）；不清理旧镜像和旧库备份；星云备份门带 `BACKUP_RETENTION=skip`，只新增、不删旧备份；星云 `rebuild.sh` 带 `REBUILD_KEEP_LOGS=1`，不清 PM2 与 auth/frontend 的历史日志。保留份数的配置不动，下一次常规发布照常收回。
 3. **照旧保留**：交互确认、站点先后、发布锁、资源门（不因 `--code-only` 放宽）、包与镜像核验、发布前库备份、回退标签与回退文件、健康检查、星云 `rebuild.sh` 的构建与重启。北大只删本次核过摘要的 `images.tar.gz` 与和发布目录副本相同的 `MANIFEST.env`（本机留有同摘要的包），目录空了才去掉，核不上就全部保留；任务目录里已有摘要不符的包时拒绝发布，不覆盖。星云的每日定时备份不走发布脚本，仍按 `KEEP` 滚动。
 4. **记录**：`RELEASE.txt` 多出 `RELEASE_KIND=code-only`、`DB_MIGRATED=skipped-code-only`、`STARTUP_MIGRATIONS=skipped-code-only`、`RETENTION_CLEANUP=skipped-code-only`、`STAGED_PACKAGE=removed-own-files` 或 `retained-not-verified`。
 5. **代价**：不清理意味着这次发布净增磁盘（一份库备份和新镜像层），发布前先看 `make status-docker` 的磁盘行。
 
-其他命令：`make status-docker`（git/容器/健康/磁盘/最近发布）、`make migrate-status-docker`、`make migrate-docker`（单独跑迁移，先备份）、`make logs-docker`、`make rollback-docker`。
+其他命令：`make status-docker`（git/容器/健康/磁盘/最近发布）、`make migrate-status-docker`、`make migrate-docker`（单独跑迁移，先备份）、`make logs-docker`；旧`make rollback-docker`已禁用。
 
-**回滚**：`make rollback-docker` 列出最近发布目录，然后在服务器上用当前发布目录里的 `rollback.override.yml` 切回发布前的镜像（`rollback-<时间戳>` 标签）：
-
-```bash
-ssh pkuailab 'cd /var/www/ai-platform && docker compose -f docker-compose.yml -f /var/backups/ai-platform/releases/current/rollback.override.yml up -d backend frontend'
-```
-
-数据库回滚从 `/var/backups/ai-platform/mysql/` 最近的 dump 恢复（加法式迁移通常不用）。
+**Docker安全回退**：旧`make rollback-docker`入口已拒绝执行。只走第六节具名流程：冻结事务提交、守卫/控制状态/审计回读成功后，工具才允许使用封存旧镜像切换。冻结失败不切换；保留全部数据库结构、审计和守卫，不自动运行down或恢复公开。
 
 **Docker 站点的已知差异**：
 - 容器启动脚本 `docker/scripts/run-migrations.sh` 只跑 `database/migrations/*.sql`（旧机制），knex 迁移由 `deploy-docker` 显式执行；两套记录表分别是 `schema_migrations` 与 `knex_migrations`。

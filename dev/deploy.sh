@@ -103,12 +103,12 @@ fi
 # automatic release. The original owner must reconcile any unknown outcome.
 PREPARED_LOCK=/var/backups/ai-platform/releases/.lock
 PREPARED_TOKEN="teacher-deploy-$TARGET_FULL-$$-$(date +%s)"
-PREPARED_LOCK_HELD=0; PREPARED_REMOTE_TERMINAL=0; BUNDLE=""
+PREPARED_LOCK_HELD=0; PREPARED_REMOTE_TERMINAL=0; PREPARED_CHECKS_SUCCEEDED=0; BUNDLE=""
 finish_deploy() {
   rc=$?
   trap - EXIT
-  if [ "$PREPARED_LOCK_HELD" = 1 ] && [ "$PREPARED_REMOTE_TERMINAL" != 1 ]; then
-    echo "UNKNOWN: retain original lock $PREPARED_TOKEN and staged evidence; no retry/unlock" >&2
+  if [ "$PREPARED_LOCK_HELD" = 1 ] && { [ "$PREPARED_REMOTE_TERMINAL" != 1 ] || [ "$PREPARED_CHECKS_SUCCEEDED" != 1 ] || [ "$rc" != 0 ]; }; then
+    echo "STOP: remote completion is not full verification; retain original lock $PREPARED_TOKEN and staged evidence; no retry/unlock" >&2
     [ "$rc" != 0 ] || rc=31
   else
     if [ -n "$BUNDLE" ]; then rm -f -- "$BUNDLE"; fi
@@ -208,3 +208,6 @@ git push origin "$TAG" || echo "⚠ tag 推送失败（本地已打 $TAG）"
 echo ""
 echo "✅ 部署完成，已打标签 $TAG"
 echo "   线上健康检查:"; curl -sf -m 15 "$HEALTH_URL" && echo || { echo "❌ 健康检查失败"; exit 1; }
+
+# Both public health checks and the publication tail have completed successfully.
+PREPARED_CHECKS_SUCCEEDED=1

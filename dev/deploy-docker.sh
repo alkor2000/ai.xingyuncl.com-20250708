@@ -477,8 +477,8 @@ for i in $(seq 1 36); do
   [ "$RUNTIME_STATUS" = CURRENT ] && break; sleep 5
 done
 if [ "$RUNTIME_STATUS" != CURRENT ]; then
-  echo "❌ 双容器 3 分钟内未运行本次镜像且 healthy（$RUNTIME_STATUS）。回滚命令："
-  if [ "$GALLERY_REVIEW" = 1 ]; then echo "   STOP: keep lock; commit and verify persistent gallery freeze BEFORE any old application rollback"; else echo "   docker compose -f $REMOTE_DIR/docker-compose.yml -f $REL/rollback.override.yml up -d backend frontend"; fi
+  echo "❌ 双容器 3 分钟内未运行本次镜像且 healthy（$RUNTIME_STATUS）。必须走安全回退流程："
+  echo "   STOP: keep lock; commit and verify persistent gallery freeze BEFORE any old application rollback; use dev/gallery-safe-rollback.sh"
   docker logs --tail 40 ai-platform-backend 2>&1 | cut -c1-160; exit 1
 fi
 L=$(docker logs ai-platform-backend 2>&1 || true)
@@ -486,8 +486,8 @@ if [ "$CODE_ONLY" = 1 ] || [ "$GALLERY_REVIEW" = 1 ]; then
   # 切换后再核一次：新容器的 CMD 确实被替换，且日志里没有启动脚本的第一行；不符就不算发布成功。
   ACTUAL_CMD=$(docker inspect ai-platform-backend --format '{{json .Config.Cmd}}' 2>/dev/null || true)
   if [ "$ACTUAL_CMD" != '["su-exec","nodejs","node","src/server.js"]' ] || grep -q '检查数据库迁移' <<<"$L"; then
-    echo "❌ 纯代码发布的后端不符合预期（CMD=${ACTUAL_CMD:-<读不到>}，或日志显示启动迁移脚本运行过）。回滚命令："
-    if [ "$GALLERY_REVIEW" = 1 ]; then echo "   STOP: keep lock; commit and verify persistent gallery freeze BEFORE any old application rollback"; else echo "   docker compose -f $REMOTE_DIR/docker-compose.yml -f $REL/rollback.override.yml up -d backend frontend"; fi
+    echo "❌ 纯代码发布的后端不符合预期（CMD=${ACTUAL_CMD:-<读不到>}，或日志显示启动迁移脚本运行过）。必须走安全回退流程："
+    echo "   STOP: keep lock; commit and verify persistent gallery freeze BEFORE any old application rollback; use dev/gallery-safe-rollback.sh"
     exit 1
   fi
   echo "    启动脚本 SQL 迁移：未运行（CMD=$ACTUAL_CMD）"

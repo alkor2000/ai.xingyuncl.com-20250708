@@ -52,7 +52,7 @@ async function inspect(knex,app) {
   for(const table of ['image_safety_references','image_safety','image_safety_events','image_safety_restrictions','image_safety_reports','video_safety','video_safety_events','video_safety_reports','gallery_machine_reviews','gallery_publication_control','gallery_publication_control_events','gallery_scan_actions'])ensure(!await knex.schema.hasTable(table),'partial_schema_requires_review');
   return {version:1,server,source,pending:names,public:rows};
 }
-async function verifyInstalled(knex) {
+async function verifyInstalled(knex, expectedFrozen = false) {
   await supported(knex);
   const [checks]=await knex.raw("SELECT TABLE_NAME,CONSTRAINT_NAME,ENFORCED FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND CONSTRAINT_NAME IN ('gallery_requires_teacher','video_gallery_requires_teacher')");
   ensure(checks.length===2&&checks.every(c=>c.ENFORCED==='YES')&&checks.some(c=>c.TABLE_NAME==='image_generations'&&c.CONSTRAINT_NAME==='gallery_requires_teacher')&&checks.some(c=>c.TABLE_NAME==='video_generations'&&c.CONSTRAINT_NAME==='video_gallery_requires_teacher'),'missing_enforced_checks');
@@ -65,8 +65,8 @@ async function verifyInstalled(knex) {
     ensure(t&&t.EVENT_OBJECT_TABLE===`${media}_${kind}`&&t.EVENT_MANIPULATION===op.toUpperCase()&&t.ACTION_TIMING==='BEFORE'&&normalize(t.ACTION_STATEMENT)===normalize(expected),'missing_or_changed_freeze_guard');
   }
   const control=await knex('gallery_publication_control').where('id',1).first();
-  ensure(control&&Number(control.frozen)===0,'unexpected_publication_freeze');
-  return {checks:2,guards:8,frozen:false};
+  ensure(control&&[0,1].includes(Number(control.frozen))&&(expectedFrozen===null||Number(control.frozen)===Number(expectedFrozen)),'unexpected_publication_freeze');
+  return {checks:2,guards:8,frozen:!!Number(control.frozen)};
 }
 async function checkEnforcement(knex) {
   // A disposable TEMPORARY table, never a real work; same pooled connection throughout.

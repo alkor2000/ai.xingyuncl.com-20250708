@@ -149,3 +149,30 @@ test('same-name freeze trigger with weakened condition is rejected',async()=>fix
  await k.raw("CREATE TRIGGER image_safety_freeze_update BEFORE UPDATE ON image_safety FOR EACH ROW BEGIN IF 0 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='gallery_publication_frozen'; END IF; END");
  await assert.rejects(tool.verifyInstalled(k),/missing_or_changed_freeze_guard/);
 }));
+test('rollback freeze commits control and audit, then verifies current persisted evidence',async()=>fixture(async(k,d)=>{
+ const gate=require('../gallery-freeze-gate.cjs');
+ await tool.apply(k,app,d,'local-test',await tool.inspect(k,app),backup);
+ const receipt=await gate.freezeAndVerify(k,'local-rollback-approval');
+ const verified=await gate.verifyFreeze(k,receipt,'local-rollback-approval');
+ assert.equal(verified.frozen,true);assert.equal(verified.guards,8);
+ const control=await k('gallery_publication_control').where('id',1).first(),audit=await k('gallery_publication_control_events').first();
+ assert.equal(Number(control.frozen),1);assert.equal(String(audit.id),String(receipt.audit_id));assert.equal(audit.approval_reference,'local-rollback-approval');
+ await assert.rejects(k('image_safety').where('generation_id',22493).update({gallery_state:'approved'}),/gallery_publication_frozen/);
+ await assert.rejects(gate.verifyFreeze(k,{...receipt,database:{...receipt.database,server_uuid:'wrong-server'}},'local-rollback-approval'),/freeze_database_changed/);
+}));
+test('rollback gate rejects missing guard without claiming freeze or creating audit',async()=>fixture(async(k,d)=>{
+ const gate=require('../gallery-freeze-gate.cjs');await tool.apply(k,app,d,'local-test',await tool.inspect(k,app),backup);
+ await k.raw('DROP TRIGGER video_safety_freeze_update');
+ await assert.rejects(gate.freezeAndVerify(k,'local-rollback-approval'),/missing_or_changed_freeze_guard/);
+ assert.equal(Number((await k('gallery_publication_control').first()).frozen),0);
+ assert.equal(Number((await k('gallery_publication_control_events').count('* as n'))[0].n),0);
+}));
+test('rollback gate refuses missing audit and later control changes while retaining freeze',async()=>fixture(async(k,d)=>{
+ const gate=require('../gallery-freeze-gate.cjs');await tool.apply(k,app,d,'local-test',await tool.inspect(k,app),backup);
+ const receipt=await gate.freezeAndVerify(k,'local-rollback-approval');
+ await k('gallery_publication_control_events').where('id',receipt.audit_id).delete();
+ await assert.rejects(gate.verifyFreeze(k,receipt,'local-rollback-approval'),/freeze_audit_readback_failed/);
+ assert.equal(Number((await k('gallery_publication_control').first()).frozen),1);
+ await k('gallery_publication_control').where('id',1).update({frozen:0});
+ await assert.rejects(gate.verifyFreeze(k,receipt,'local-rollback-approval'),/unexpected_publication_freeze/);
+}));

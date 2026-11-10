@@ -129,15 +129,10 @@ migrate-docker: ## 在 Docker 站点单独执行待执行的 knex 迁移（先�
 logs-docker: ## 看 Docker 站点后端最近日志
 	ssh -n $(DOCKER_SSH_HOST) 'docker logs --tail 60 ai-platform-backend 2>&1 | cut -c1-200'
 
-.PHONY: rollback-docker
-rollback-docker: ## 列出 Docker 站点最近的发布目录与库备份，回滚步骤见 dev/RELEASE.md 第七节
-	@ssh -n $(DOCKER_SSH_HOST) 'ls -t /var/backups/ai-platform/releases | grep -v ^current | head -5; echo "--- 库备份"; ls -t /var/backups/ai-platform/mysql/*.sql.gz 2>/dev/null | head -3'
-	@echo "回滚到本次发布前的镜像: ssh $(DOCKER_SSH_HOST) 'cd $(DOCKER_REMOTE_DIR) && docker compose -f docker-compose.yml -f /var/backups/ai-platform/releases/current/rollback.override.yml up -d backend frontend'"
-
-.PHONY: rollback
-rollback: ## 列出最近的部署 tag 与服务器备份，回滚步骤见 dev/RELEASE.md 第六节
-	@git tag -l 'deploy-*' | tail -5
-	@ssh -n $(SSH_HOST) 'ls -t /var/backups/ai-platform/mysql/*.sql.gz 2>/dev/null | head -5'
+.PHONY: rollback-docker rollback
+rollback-docker rollback: ## 旧裸回退入口已禁用；使用先冻结并回读的具名安全流程
+	@echo 'STOP: 旧回退入口已禁用。按 dev/RELEASE.md 第六节使用 dev/gallery-safe-rollback.sh；冻结提交、八守卫、控制状态和审计回读成功前不得切旧应用。' >&2
+	@exit 2
 
 .PHONY: logs
 logs: ## 看生产 PM2 最近日志
