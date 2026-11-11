@@ -63,6 +63,8 @@ const Mindmap = () => {
   const [listLoading, setListLoading] = useState(false)
   const [shareVisible, setShareVisible] = useState(false)
   const [shareUrl, setShareUrl] = useState('')
+  const [shareState,setShareState]=useState('draft')
+  const [shareRevision,setShareRevision]=useState(0)
   const [renameVisible, setRenameVisible] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [renameTarget, setRenameTarget] = useState(null)
@@ -198,10 +200,10 @@ const Mindmap = () => {
     setSaving(true)
     try {
       if (currentId) {
-        await apiClient.put(`/mindmap/${currentId}`, { title: title.trim(), map_type: mode, content })
+        await apiClient.put(`/mindmap/${currentId}`, { title: title.trim(), content_type: mode, content })
       } else {
-        const res = await apiClient.post('/mindmap', { title: title.trim(), map_type: mode, content })
-        if (res.data.success) setCurrentId(res.data.data.id)
+        const res = await apiClient.post('/mindmap', { title: title.trim(), content_type: mode, content })
+        if (res.data.success) {setCurrentId(res.data.data.id);setShareState('draft');setShareRevision(0)}
       }
       message.success(t('mindmap.message.saveSuccess'))
       refreshCredits()
@@ -216,9 +218,9 @@ const Mindmap = () => {
     setSaving(true)
     try {
       const newTitle = `${title.trim()}${t('mindmap.saveAsCopySuffix')}`
-      const res = await apiClient.post('/mindmap', { title: newTitle, map_type: mode, content })
+      const res = await apiClient.post('/mindmap', { title: newTitle, content_type: mode, content })
       if (res.data.success) {
-        setCurrentId(res.data.data.id)
+        setCurrentId(res.data.data.id);setShareState('draft');setShareRevision(0)
         setTitle(newTitle)
         message.success(t('mindmap.saveAsSuccess'))
         refreshCredits()
@@ -241,7 +243,7 @@ const Mindmap = () => {
       okText: t('mindmap.newConfirmOk'),
       cancelText: t('common.cancel'),
       onOk: () => {
-        setCurrentId(null)
+        setCurrentId(null);setShareState('draft');setShareRevision(0)
         setTitle('')
         setContent(DEFAULT_CONTENT[mode])
       }
@@ -267,8 +269,9 @@ const Mindmap = () => {
       if (res.data.success) {
         const d = res.data.data
         setCurrentId(d.id)
+        setShareState(d.share_state);setShareRevision(d.share_revision)
         setTitle(d.title)
-        setMode(d.map_type)
+        setMode(d.content_type)
         setContent(d.content)
         setListVisible(false)
         message.success(t('mindmap.opened', { title: d.title }))
@@ -280,7 +283,7 @@ const Mindmap = () => {
     try {
       await apiClient.delete(`/mindmap/${item.id}`)
       message.success(t('common.deleteSuccess'))
-      if (item.id === currentId) { setCurrentId(null) }
+      if (item.id === currentId) { setCurrentId(null);setShareState('draft');setShareRevision(0) }
       fetchList()
     } catch (e) { message.error(t('common.deleteFailed')) }
   }
@@ -334,9 +337,18 @@ const Mindmap = () => {
       const res = await apiClient.post(`/mindmap/${currentId}/share`)
       if (res.data.success) {
         setShareUrl(`${window.location.origin}${res.data.data.share_path}`)
+        setShareState(res.data.data.share_state);setShareRevision(res.data.data.share_revision)
         setShareVisible(true)
       }
     } catch (e) { message.error(e.response?.data?.message || t('message.error')) }
+  }
+
+  const handleWithdrawShare = async () => {
+    try {
+      const r=await apiClient.post(`/shared-works/mindmap/${currentId}/withdraw`,{revision:shareRevision});
+      setShareState('withdrawn');setShareRevision(r.data.data.revision);setShareVisible(false);
+      message.success(t('sharedWorks.withdrawn'));
+    } catch(e) { message.error(e.response?.data?.message||t('sharedWorks.failed')); }
   }
 
   const handleCopyShareLink = () => {
@@ -474,8 +486,10 @@ const Mindmap = () => {
             <SaveOutlined /> {t('mindmap.save')}{creditsConfig.save > 0 ? ` ${t('mindmap.export.creditsSuffix', { credits: creditsConfig.save })}` : ''}
           </Dropdown.Button>
           <Tooltip title={currentId ? t('mindmap.shareTooltip') : t('mindmap.shareTooltipSaveFirst')}>
-            <Button icon={<ShareAltOutlined />} onClick={handleShare} disabled={!currentId}>{t('mindmap.share')}</Button>
+            <Button icon={<ShareAltOutlined />} onClick={handleShare} disabled={!currentId}>{t(shareState==='withdrawn'?'sharedWorks.republish':'mindmap.share')}</Button>
           </Tooltip>
+            {currentId&&<Tag>{t(`sharedWorks.${shareState}`)}</Tag>}
+            {currentId&&shareState==='published'&&<Button danger onClick={handleWithdrawShare}>{t('sharedWorks.withdraw')}</Button>}
           <Dropdown menu={{ items: exportMenuItems }} disabled={exporting}>
             <Button icon={<ExportOutlined />} loading={exporting}>{t('mindmap.export')} <DownOutlined /></Button>
           </Dropdown>
@@ -554,11 +568,14 @@ const Mindmap = () => {
               >
                 <List.Item.Meta
                   title={
-                    <Space size={6}>
-                      <span>{item.title}</span>
-                      {getTypeTag(item.map_type)}
+                    <div>
+                      <div style={{ overflowWrap: 'anywhere', marginBottom: 6 }}>{item.title}</div>
+                      <Space size={6} wrap>
+                      {getTypeTag(item.content_type)}
+                      <Tag>{t(`sharedWorks.${item.share_state}`)}</Tag>
                       {item.id === currentId && <Tag color="processing">{t('mindmap.listCurrent')}</Tag>}
-                    </Space>
+                      </Space>
+                    </div>
                   }
                   description={formatTime(item.updated_at || item.created_at)}
                 />

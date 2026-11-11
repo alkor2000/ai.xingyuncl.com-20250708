@@ -244,6 +244,7 @@ app.use('/api/studio-pilot', studioPilotRoutes);
 app.use('/api/html-editor', htmlEditorRoutes);
 app.use('/api/storage', storageRoutes);
 app.use('/api/mindmap', mindmapRoutes);
+app.use('/api/shared-works', require('./routes/sharedWorks'));
 app.use('/api/ocr', ocrRoutes);
 app.use('/api/calendar', calendarRoutes);
 
@@ -260,7 +261,7 @@ app.use('/api/doc-templates', docTemplateRoutes);
 app.use('/api/v1/agent', agentExternalRoutes);
 
 /* ============================================================
- * 公开页面路由（无需认证）
+ * 旧网页链接仅跳转到登录查看页，不返回作品内容
  * ============================================================ */
 app.get('/pages/:userId/:slug', require('./controllers/HtmlEditorController').previewPage);
 

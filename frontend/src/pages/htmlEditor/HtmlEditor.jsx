@@ -302,6 +302,11 @@ const HtmlEditor = () => {
     try { const r = await togglePublish(selectedPageId); if (r.is_published) { showLinkModal(r); await refreshCredits(); await getPages(selectedProject?.id); } } catch (e) { message.error(t('htmlEditor.link.generateFailed')); } finally { setIsGeneratingLink(false); }
   };
 
+  const handleWithdraw = async () => {
+    try { await apiClient.post(`/shared-works/html/${currentPage.id}/withdraw`, { revision:currentPage.version }); await loadPage(currentPage.id); await getPages(selectedProject?.id); message.success(t('sharedWorks.withdrawn')); }
+    catch(e) { message.error(e.response?.data?.message || t('sharedWorks.failed')); }
+  };
+
   /* 永久链接弹窗：URL 用 window.location.origin 动态拼接，支持多域名部署 */
   const showLinkModal = (page) => {
     const url = `${window.location.origin}/pages/${user.id}/${page.slug}`;
@@ -366,12 +371,14 @@ const HtmlEditor = () => {
           {currentPage && <Space size={6}>
             {/* 页面标题为用户录入的业务数据，不翻译 */}
             <Tag style={{ ...S.tag, background: 'var(--brand-soft)', color: 'var(--primary-color)' }}><Html5Outlined /> {currentPage.title}</Tag>
+            {!currentPage.is_published && currentPage.published_at && <Tag>{t('sharedWorks.withdrawn')}</Tag>}
+            {currentPage.is_published && <Button danger onClick={handleWithdraw}>{t('sharedWorks.withdraw')}</Button>}
             {currentPage.is_published && <Tag style={{ ...S.tag, background: 'linear-gradient(135deg,#34C759,#30B854)', color: 'white' }}><GlobalOutlined /> {t('htmlEditor.published')}</Tag>}
           </Space>}
         </div>
         <Space size={8}>
           <Tooltip title={`${t('htmlEditor.generateLink')} (${fmtCredits(creditsConfig.credits_per_publish)})`}>
-            <Button style={{ ...S.btn('var(--primary-color)'), width: 34, display: 'flex', alignItems: 'center', justifyContent: 'center' }} icon={<LinkOutlined />} onClick={handleGeneratePermalink} loading={isGeneratingLink} disabled={!selectedPageId} />
+            <Button style={{ ...S.btn('var(--primary-color)'), width: currentPage?.published_at && !currentPage.is_published ? 'auto' : 34, display: 'flex', alignItems: 'center', justifyContent: 'center' }} icon={<LinkOutlined />} onClick={handleGeneratePermalink} loading={isGeneratingLink} disabled={!selectedPageId}>{currentPage?.published_at && !currentPage.is_published ? t('sharedWorks.republish') : null}</Button>
           </Tooltip>
           <Tag style={{ ...S.tag, background: 'var(--body-bg)', color: 'var(--text-color-secondary)' }}>
             {creditsLoading ? <><LoadingOutlined spin /> {t('htmlEditor.loading')}</> : <><DollarOutlined /> {t('htmlEditor.credits')}: {userCredits}</>}

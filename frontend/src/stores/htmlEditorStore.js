@@ -260,7 +260,7 @@ const useHtmlEditorStore = create((set, get) => ({
   // 发布/取消发布页面
   togglePublish: async (pageId) => {
     try {
-      const response = await apiClient.post(`/html-editor/pages/${pageId}/toggle-publish`);
+      const response = await apiClient.post(`/html-editor/pages/${pageId}/toggle-publish`, { revision: get().pages.find(p => p.id === pageId)?.version ?? get().currentPage?.version });
       if (response.data.success) {
         // 更新页面列表中的状态
         set(state => ({

@@ -389,6 +389,8 @@ class HtmlEditorController {
 
       // 准备更新数据
       const updateData = { ...otherData };
+      delete updateData.is_published;
+      delete updateData.publish_url;
       if (title) updateData.title = title;
       
       // 如果有内容更新，编译内容
@@ -442,70 +444,38 @@ class HtmlEditorController {
   static async togglePublish(req, res) {
     try {
       const userId = req.user.id;
-      const { id } = req.params;
-
-      // 检查权限
-      const page = await HtmlPage.findById(id);
-      if (!page) {
-        return ResponseHelper.notFound(res, '页面不存在');
-      }
-      
-      if (page.user_id !== userId) {
-        return ResponseHelper.forbidden(res, '无权操作此页面');
-      }
-
-      // 如果是要发布页面（生成永久链接）
-      if (!page.is_published) {
-        // 获取发布积分配置
-        const settingQuery = `
-          SELECT setting_value, setting_type FROM system_settings 
-          WHERE setting_key = 'html_editor.credits_per_publish'
-        `;
-        const settingResult = await dbConnection.query(settingQuery);
-        const creditsRequired = parseInt(settingResult.rows[0]?.setting_value || 5);
-
-        // 只有当积分大于0时才检查和扣除积分
-        if (creditsRequired > 0) {
-          const user = await User.findById(userId);
-          if (!user.hasCredits(creditsRequired)) {
-            return ResponseHelper.forbidden(res, 
-              `积分不足，需要 ${creditsRequired} 积分生成永久链接，当前余额 ${user.getCredits()} 积分`
-            );
+      const id = require('../services/galleryModerationService').idOf(req.params.id);
+      const revision = req.body.revision;
+      const fail = (message, statusCode) => Object.assign(new Error(message), { statusCode });
+      if (!Number.isSafeInteger(revision)) throw fail('请刷新页面版本后重新操作', 400);
+      const updatedPage = await dbConnection.transaction(async query => {
+        const { rows } = await query('SELECT * FROM html_pages WHERE id=? AND user_id=? FOR UPDATE', [id, userId]);
+        const page = rows[0];
+        if (!page) throw fail('页面不存在或无权操作', 404);
+        if (Number(page.version) !== revision) throw fail('页面已变更，请刷新后重新操作', 409);
+        const publishing = !Number(page.is_published);
+        if (publishing) {
+          const { rows: settings } = await query("SELECT setting_value FROM system_settings WHERE setting_key='html_editor.credits_per_publish'");
+          const amount = Number(settings[0]?.setting_value ?? 5);
+          if (!Number.isSafeInteger(amount) || amount < 0) throw fail('发布积分配置异常', 503);
+          if (amount > 0) {
+            const { rows: accounts } = await query('SELECT credits_quota,used_credits,credits_expire_at FROM users WHERE id=? AND deleted_at IS NULL FOR UPDATE', [userId]);
+            const account = accounts[0];
+            if (!account || (account.credits_expire_at && new Date(account.credits_expire_at).getTime() < Date.now()) || Number(account.credits_quota)-Number(account.used_credits) < amount) throw fail('积分不足或已过期，无法发布', 403);
+            await query('UPDATE users SET used_credits=used_credits+?,updated_at=NOW() WHERE id=?', [amount,userId]);
+            await query('INSERT INTO credit_transactions (user_id,amount,balance_after,transaction_type,description) VALUES (?,?,?,?,?)', [userId,-amount,Number(account.credits_quota)-Number(account.used_credits)-amount,'html_publish','HTML页面发布（生成永久链接）']);
           }
-
-          // 扣除积分
-          await user.consumeCredits(creditsRequired, null, null, 'HTML页面发布（生成永久链接）', 'html_publish');
-          
-          logger.info('HTML页面发布扣除积分', { 
-            userId, 
-            pageId: id, 
-            creditsConsumed: creditsRequired 
-          });
         }
-      }
-
-      // 切换发布状态
-      const newStatus = page.is_published ? 0 : 1;
-      const publishUrl = newStatus ? `/pages/${userId}/${page.slug}` : null;
-
-      const success = await HtmlPage.update(id, {
-        is_published: newStatus,
-        publish_url: publishUrl
+        await query(`UPDATE html_pages SET is_published=?,publish_url=?,version=version+1${publishing ? ',published_at=NOW()' : ''} WHERE id=?`, [publishing?1:0,publishing?`/pages/${userId}/${page.slug}`:null,id]);
+        await query('INSERT INTO shared_work_events (work_type,work_id,actor_id,action) VALUES (?,?,?,?)', ['html',id,userId,publishing?'publish':'withdraw']);
+        if (!publishing) await query("UPDATE shared_work_reports SET resolved_at=NOW() WHERE work_type='html' AND work_id=? AND resolved_at IS NULL", [id]);
+        return (await query('SELECT * FROM html_pages WHERE id=?', [id])).rows[0];
       });
-
-      if (!success) {
-        return ResponseHelper.error(res, '操作失败');
-      }
-
-      const updatedPage = await HtmlPage.findById(id);
-      
-      const message = newStatus ? '页面已发布，永久链接已生成' : '页面已取消发布';
-      
-      await noteWebsiteArtifactChange(req, { projectId: updatedPage?.project_id, contentSave: false });
-      return ResponseHelper.success(res, updatedPage, message);
+      await noteWebsiteArtifactChange(req, { projectId: updatedPage.project_id, contentSave: false });
+      return ResponseHelper.success(res, updatedPage, updatedPage.is_published ? '页面已发布' : '页面已撤回');
     } catch (error) {
       logger.error('切换发布状态失败:', error);
-      return ResponseHelper.error(res, '操作失败');
+      return ResponseHelper.error(res, error.statusCode ? error.message : '操作失败', error.statusCode || 500);
     }
   }
 
@@ -605,25 +575,9 @@ class HtmlEditorController {
    * 预览页面（公开访问）
    */
   static async previewPage(req, res) {
-    try {
-      const { userId, slug } = req.params;
-      
-      const page = await HtmlPage.findBySlug(userId, slug);
-      
-      if (!page) {
-        return res.status(404).send('页面不存在');
-      }
-
-      // 增加浏览量
-      await HtmlPage.incrementViewCount(page.id);
-
-      // 返回编译后的HTML
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.send(page.compiled_content);
-    } catch (error) {
-      logger.error('预览页面失败:', error);
-      res.status(500).send('页面加载失败');
-    }
+    // Keep existing published URLs, but never serve student HTML on the authenticated origin.
+    res.set('Cache-Control', 'private, no-store');
+    return res.redirect(302, `/shared-pages/${encodeURIComponent(req.params.userId)}/${encodeURIComponent(req.params.slug)}`);
   }
 }
 

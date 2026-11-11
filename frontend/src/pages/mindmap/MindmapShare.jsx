@@ -1,8 +1,9 @@
+import SharedWorkReportButton from '../../components/common/SharedWorkReportButton';
 /**
  * 思维导图公开分享页面 - 只读视图
  *
  * 路由: /mindmap/share/:id/:token
- * 无需登录，通过 HMAC token 验证访问权限
+ * 登录后，通过发布状态与 HMAC token 验证访问权限
  *
  * ===== v2.1 国际化改造要点（务必理解，勿回退）=====
  *
@@ -59,7 +60,7 @@ const MARKMAP_DECORATE_DELAY_MS = 300;
  * 注意：本组件必须自己调 useTranslation，
  * 因为它虽定义在同一文件内，但仍是独立组件，不共享父组件作用域的 t。
  */
-const PlatformBanner = ({ title, subtitle, showLoginEntry = true }) => {
+const PlatformBanner = ({ title, subtitle, showLoginEntry = false }) => {
   const { t } = useTranslation();
   const { getSiteName, getSiteLogo } = useSystemConfigStore();
 
@@ -356,7 +357,7 @@ const MindmapShare = () => {
       {/* 顶部工具栏：更新时间 + 缩放按钮组 */}
       <div className="mindmap-share-toolbar">
         <div className="mindmap-share-toolbar-left">
-          {renderUpdatedAt()}
+          {renderUpdatedAt()} <SharedWorkReportButton kind="mindmap" id={data.id}/>
         </div>
         <div className="mindmap-share-toolbar-right">
           {/* 缩放三按钮复用主编辑页已有的 mindmap.zoom.* 键，避免重复定义 */}

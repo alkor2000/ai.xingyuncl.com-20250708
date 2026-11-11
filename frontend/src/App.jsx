@@ -13,7 +13,7 @@ import FeedbackHubPage from './pages/feedback/FeedbackHubPage'
  * - v1.2.1 (2026-01-29): 修复无痕浏览器默认语言不生效问题
  * - v1.2.2 (2026-01-29): 修复 setSystemDefaultLanguage 异步等待问题
  * - v1.3.0 (2026-03-16): 新增社区论坛模块路由
- * - v1.4.0 (2026-05-19): 新增思维导图公开分享路由 /mindmap/share/:id/:token（无需登录）
+ * - v1.4.0 (2026-05-19): 新增思维导图分享路由 /mindmap/share/:id/:token（现已要求登录）
  */
 
 import React, { Suspense, useEffect, useState } from 'react'
@@ -83,6 +83,7 @@ const Mindmap = React.lazy(() => import('./pages/mindmap/Mindmap'))
 
 // 思维导图公开分享页面 - 懒加载（v1.4.0 新增，无需登录）
 const MindmapShare = React.lazy(() => import('./pages/mindmap/MindmapShare'))
+const HtmlShare = React.lazy(() => import('./pages/sharedWorks/HtmlShare'))
 
 // OCR页面组件 - 懒加载
 const OcrTool = React.lazy(() => import('./pages/ocr/OcrTool'))
@@ -386,17 +387,17 @@ const App = () => {
                 element={<PortalCapabilityEntry />}
               />
 
-              {/* v1.4.0 思维导图公开分享路由 - 无需登录，登录用户也可访问 */}
-              {/* 注意：直接渲染，不包裹 PublicRoute（PublicRoute会把已登录用户跳走）也不包裹 ProtectedRoute（强制登录） */}
+              {/* 思维导图分享链接（新旧链接均需登录） */}
+              {/* 登录后返回当前分享地址 */}
               <Route 
                 path="/mindmap/share/:id/:token" 
                 element={
-                  <LazyLoadingWrapper>
-                    <MindmapShare />
-                  </LazyLoadingWrapper>
+                  <ProtectedRoute><LazyLoadingWrapper><MindmapShare /></LazyLoadingWrapper></ProtectedRoute>
                 } 
               />
 
+              <Route path="/shared-pages/:userId/:slug" element={<ProtectedRoute><LazyLoadingWrapper><HtmlShare /></LazyLoadingWrapper></ProtectedRoute>} />
+              <Route path="/pages/:userId/:slug" element={<ProtectedRoute><LazyLoadingWrapper><HtmlShare /></LazyLoadingWrapper></ProtectedRoute>} />
               {/* 受保护的路由 */}
               <Route
                 path="/*"
