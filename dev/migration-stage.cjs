@@ -31,6 +31,7 @@ function identity(repo, target, dir) {
 }
 function prepare(repo, target, dir, expectedParent, profile = 'teacher-review') {
   const paths = selectedPaths(profile);
+  if (profile === 'gallery-review' && plans.compatible_rollback) require('./shared-rollback-bind.cjs').source(repo);
   identity(repo, target, dir);
   assert(git(repo, ['status', '--porcelain']).toString() === '', 'dirty_preimage');
   const parent = git(repo, ['rev-parse', 'HEAD']).toString().trim();
@@ -54,6 +55,7 @@ function prepare(repo, target, dir, expectedParent, profile = 'teacher-review') 
   return record;
 }
 function verifyFiles(repo, record) {
+  if (record.profile === 'gallery-review' && plans.compatible_rollback) require('./shared-rollback-bind.cjs').source(repo);
   const paths = selectedPaths(record.profile);
   assert(git(repo, ['rev-parse', 'HEAD']).toString().trim() === record.parent, 'runtime_parent_changed');
   const status = git(repo, ['status', '--porcelain', '--untracked-files=all']).toString().trimEnd().split('\n').sort();
@@ -115,6 +117,7 @@ async function verifyGalleryDatabase(repo, record) {
   try {
     const check = require('./gallery-migrate.cjs');
     await check.verifyInstalled(knex);
+    await check.verifySharedInstalled(knex);
     await check.checkEnforcement(knex);
   } finally { await knex.destroy(); }
 }

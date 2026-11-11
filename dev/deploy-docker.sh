@@ -211,7 +211,7 @@ else
   if [ "$KEEP_HISTORY" = 1 ]; then echo "  历史保留:    不清理旧镜像和旧库备份"; else echo "  清理策略:    切换成功后清理旧镜像和旧库备份"; fi
 fi
 if [ "$GALLERY_REVIEW" = 1 ]; then
-  echo '  画廊迁移: 六张固定清单；停止backend并排空写者；仅2图4视频撤回pending；失败保留锁/证据，不自动恢复公开或裸回退'
+  echo '  合并迁移: 七张摘要绑定清单（画廊六张+分享一张）；停止backend并排空写者；仅已批2图4视频撤回pending；失败保留锁/证据，必须用共享作品停用的兼容回退版'
   echo '  隔离前提: 发布负责人已确认无其他数据库写者；无此证据不得确认。启动SQL迁移禁用，保留全部历史。'
 fi
 echo "=============================================================="
@@ -422,6 +422,13 @@ if [ "$GALLERY_REVIEW" != 1 ]; then ln -sfn "$REL" /var/backups/ai-platform/rele
 if [ "$GALLERY_REVIEW" = 1 ]; then
   echo "RELEASE_KIND=gallery-review" >> "$REL/RELEASE.txt"
   echo "GALLERY_APPROVAL=$GALLERY_APPROVAL" >> "$REL/RELEASE.txt"
+  # A verified compatible fallback must exist before stopping writers or changing the DB.
+  COMPAT=$(node -e 'process.stdout.write(require("./dev/gallery-migration-plan.json").compatible_rollback?.candidate||"")')
+  if [ -n "$COMPAT" ]; then
+    COMPAT_MANIFEST="/var/backups/ai-platform/compatible-rollback/$COMPAT/manifest.json"
+    node dev/shared-rollback-bind.cjs image "$REMOTE_DIR" "$COMPAT_MANIFEST" > "$REL/COMPATIBLE-IMAGE.txt"
+    cp "$COMPAT_MANIFEST" "$REL/compatible-backend.json"
+  fi
   mkdir -m 700 "$REL/gallery-migrations"
   # Stop the sole known business writer before taking the exact public snapshot and backup.
   docker compose stop backend </dev/null
@@ -457,7 +464,7 @@ if [ "$GALLERY_REVIEW" = 1 ]; then
   sha256sum -c "$BK.sha256" >/dev/null
   gallery_migration apply
   [ -s "$REL/gallery-migrations/COMPLETE.json" ] || exit 2
-  echo "DB_MIGRATED=gallery-exact-six" >> "$REL/RELEASE.txt"
+  echo "DB_MIGRATED=gallery-sharing-exact-seven" >> "$REL/RELEASE.txt"
 elif [ "$CODE_ONLY" = 1 ]; then
   echo "    纯代码发布：不执行 knex 迁移"
   echo "DB_MIGRATED=skipped-code-only" >> "$REL/RELEASE.txt"

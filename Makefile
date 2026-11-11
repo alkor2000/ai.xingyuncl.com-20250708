@@ -89,7 +89,7 @@ migrate: ## 原迁移入口；ARGS=--prepared 核验已预置的精确迁移清�
 	@if [ "$(ARGS)" = --prepared ]; then bash $(ROOT)/dev/prepare-migrations.sh migrate; elif [ -z "$(ARGS)" ]; then $(MAKE) migrate-native; else echo '未知迁移参数'; exit 2; fi
 
 .PHONY: prepare-migrations
-prepare-migrations: ## 预置精确迁移清单（MIGRATION_PROFILE=gallery-review为11-10三张），不切应用
+prepare-migrations: ## 预置精确迁移清单（MIGRATION_PROFILE=gallery-review为画廊三张+分享一张），不切应用
 	bash $(ROOT)/dev/prepare-migrations.sh prepare
 
 .PHONY: migrate-native

@@ -5,11 +5,18 @@ is tested separately against real MySQL. This harness never claims real image bu
 import unittest,tempfile,pathlib,subprocess,os,json,hashlib,shutil
 ROOT=pathlib.Path(__file__).resolve().parents[2]
 class Flow(unittest.TestCase):
- def run_flow(self,failure=''):
+ def run_flow(self,failure='',compatible=False):
   with tempfile.TemporaryDirectory(prefix='gallery-shell-test-') as name:
    t=pathlib.Path(name);app=t/'app';app.mkdir();dev=app/'dev';dev.mkdir();binpath=t/'bin';binpath.mkdir();log=t/'calls';backups=t/'backups';pkg=t/'pkg';pkg.mkdir()
    (app/'.env').write_text('CUSTOMER_DOMAIN=example.invalid\n')
    for file in ['gallery-migrate.cjs','gallery-migration-plan.json']:(dev/file).write_bytes((ROOT/'dev'/file).read_bytes())
+   plan=json.loads((dev/'gallery-migration-plan.json').read_text());
+   if not compatible:plan.pop('compatible_rollback',None)
+   (dev/'gallery-migration-plan.json').write_text(json.dumps(plan))
+   if compatible:
+    target=backups/'compatible-rollback'/plan['compatible_rollback']['candidate'];target.mkdir(parents=True);(target/'manifest.json').write_text('{}')
+    # Shell-order probe only; helper identity behavior is tested in gallery-rollback.test.py.
+    (dev/'shared-rollback-bind.cjs').write_text("require('fs').appendFileSync(process.env.MOCK_LOG,'COMPAT_CHECK\\n');if(process.env.FAILURE==='compatible')process.exit(2);console.log('sha256:fixture')")
    (dev/'docker-release-lock.sh').write_text('#!/bin/bash\nprintf "UNLOCK %s\\n" "$*" >> "$MOCK_LOG"\n')
    (dev/'docker-release-preflight.sh').write_text('''#!/bin/bash
 case "$1" in
@@ -61,6 +68,12 @@ elif args[0]=='ps':print('ai-platform-backend healthy')
    self.assertNotIn('run-migrations.sh',result.stdout)
    self.assertNotIn('autoremove',calls)
    rel=backups/'releases'/('ai-platform-'+args[11]);evidence=rel/'gallery-migrations'
+   if compatible:
+    self.assertIn('COMPAT_CHECK',calls)
+    if failure=='compatible':
+     self.assertNotEqual(result.returncode,0);self.assertNotIn('["compose", "stop"',calls);self.assertFalse(evidence.exists());return result.returncode
+    self.assertLess(calls.index('COMPAT_CHECK'),calls.index('["compose", "stop"'))
+    self.assertTrue((rel/'compatible-backend.json').exists())
    self.assertTrue((evidence/'PLAN.json').exists(),result.stdout+result.stderr)
    self.assertTrue((evidence/'BACKUP.json').exists(),result.stdout+result.stderr)
    self.assertTrue((evidence/'INTENT.json').exists(),result.stdout+result.stderr)
@@ -76,6 +89,8 @@ elif args[0]=='ps':print('ai-platform-backend healthy')
     self.assertTrue((evidence/'COMPLETE.json').exists());self.assertTrue((backups/'releases/current').is_symlink())
     self.assertIn('STARTUP_MIGRATIONS=skipped-gallery-exact',(rel/'RELEASE.txt').read_text())
    return result.returncode
+ def test_compatible_preflight_before_writer_stop(self):
+  self.run_flow('',True);self.run_flow('compatible',True)
  def test_outer_lock_retained_until_all_postchecks_finish(self):
   source=(ROOT/'dev/deploy-docker.sh').read_text();function=next(line for line in source.splitlines() if line.startswith('release_lock() {'))
   with tempfile.TemporaryDirectory(prefix='gallery-lock-test-') as name:

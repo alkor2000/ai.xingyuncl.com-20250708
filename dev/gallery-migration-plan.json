@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "business_candidate": "3079f1259cf042a3b48c6609d4ccfcd5353f246d",
+  "version": 2,
+  "business_candidate": "246508f10b76bc4a79722a407ee91a3b39e1195d",
   "migrations": [
     {
       "name": "20261105_001_image_safety.js",
@@ -25,6 +25,10 @@
     {
       "name": "20261110_003_gallery_rollback_guard.js",
       "sha256": "3f2398291e71e343504fcf6b2fed934f5cf17e76c101933308247334d36bd312"
+    },
+    {
+      "name": "20261111_001_shared_work_visibility.js",
+      "sha256": "e4e912eaaffc1a9cf8a6388e20cede3476911245443fa2686de3a0fd35c201d5"
     }
   ],
   "profiles": {
@@ -36,7 +40,8 @@
     "gallery-review": [
       "20261110_001_gallery_reports_visibility.js",
       "20261110_002_gallery_machine_review.js",
-      "20261110_003_gallery_rollback_guard.js"
+      "20261110_003_gallery_rollback_guard.js",
+      "20261111_001_shared_work_visibility.js"
     ],
     "gallery-pku": [
       "20261105_001_image_safety.js",
@@ -44,7 +49,8 @@
       "20261106_002_video_teacher_review.js",
       "20261110_001_gallery_reports_visibility.js",
       "20261110_002_gallery_machine_review.js",
-      "20261110_003_gallery_rollback_guard.js"
+      "20261110_003_gallery_rollback_guard.js",
+      "20261111_001_shared_work_visibility.js"
     ]
   },
   "historical_public": {
@@ -58,5 +64,14 @@
       11812,
       11941
     ]
+  },
+  "shared_work_migration": "20261111_001_shared_work_visibility.js",
+  "compatible_rollback": {
+    "candidate": "49e03a4c3767508244063ac597797efbc715cd39",
+    "base": "f0b94dcb4ba099418eee8442f53ca1dd759ca043",
+    "files": {
+      "backend/src/app.js": "e38119531a660fa7052edf67962f204f2475695d1196d9c0df2937b518702693",
+      "backend/src/middleware/sharedWorkRollbackGate.js": "95f25d21bc1ae51c46f2e4230351f477ff0c4a4a1aaaa76ba099433231af76fc"
+    }
   }
 }

@@ -5,7 +5,7 @@ set -euo pipefail
 umask 077
 MODE=${1:-}; REL=${2:-}; TARGET=${3:-}; APPROVAL=${4:-}; TOKEN=${5:-}
 if [ "$#" != 5 ] || ! [[ "$MODE" =~ ^(docker|pm2)$ ]] || ! [[ "$APPROVAL" =~ ^[A-Za-z0-9_.:-]{1,200}$ ]] || ! [[ "$TOKEN" =~ ^[A-Za-z0-9._-]{8,80}$ ]]; then
-  echo 'usage (server): bash dev/gallery-safe-rollback.sh docker|pm2 RELEASE_DIR recorded-images|PARENT_SHA APPROVAL_REFERENCE OWN_LOCK_TOKEN' >&2; exit 2
+  echo 'usage (server): bash dev/gallery-safe-rollback.sh docker|pm2 RELEASE_DIR compatible-images|PINNED_COMPAT_SHA APPROVAL_REFERENCE OWN_LOCK_TOKEN' >&2; exit 2
 fi
 APP=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 [ "$APP" = /var/www/ai-platform ] || { echo 'STOP: this rollback entry is bound to /var/www/ai-platform'; exit 2; }
@@ -26,14 +26,20 @@ trap 'rc=$?; if [ "$rc" != 0 ]; then echo "STOP: retain lock, evidence and any c
 if compgen -G "$REL/safe-rollback-*" >/dev/null; then echo 'STOP: existing rollback attempt; reconcile it first' >&2; exit 3; fi
 EVIDENCE="$REL/safe-rollback-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 mkdir -m 700 "$EVIDENCE"
-for file in gallery-freeze-gate.cjs gallery-migrate.cjs gallery-migration-plan.json; do
+for file in gallery-freeze-gate.cjs gallery-migrate.cjs gallery-migration-plan.json shared-rollback-bind.cjs; do
   want=$(git show "HEAD:dev/$file" | sha256sum | cut -d' ' -f1)
   cp "dev/$file" "$EVIDENCE/$file"
   [ "$(sha256sum "$EVIDENCE/$file" | cut -d' ' -f1)" = "$want" ] || exit 2
   chmod 600 "$EVIDENCE/$file"
 done
+COMPAT=$(node -e 'const p=require(process.argv[1]);process.stdout.write(p.compatible_rollback?.candidate||"")' "$APP/dev/gallery-migration-plan.json")
+if [ -n "$COMPAT" ]; then
+  [ "$(node "$EVIDENCE/shared-rollback-bind.cjs" source "$APP")" = "$COMPAT" ] || exit 2
+  if [ "$MODE" = docker ]; then [ "$TARGET" = compatible-images ] || { echo 'STOP: original images would reopen anonymous shared works; use compatible-images'; exit 2; }
+  else [ "$TARGET" = "$COMPAT" ] || { echo 'STOP: only the pinned shared-work maintenance fallback is allowed'; exit 2; }; fi
+fi
 if [ "$MODE" = docker ]; then
-  [ "$TARGET" = recorded-images ] && [ -f "$REL/rollback.override.yml" ] && [ -f "$REL/release.override.yml" ] || exit 2
+  { [ -n "$COMPAT" ] || [ "$TARGET" = recorded-images ]; } && [ -f "$REL/rollback.override.yml" ] && [ -f "$REL/release.override.yml" ] || exit 2
   [ "$(sed -n 's/^SOURCE_COMMIT=//p' "$REL/RELEASE.txt")" = "$(git rev-parse HEAD)" ] || { echo 'STOP: release source differs from reviewed checkout'; exit 2; }
   grep -Fq 'command: ["su-exec", "nodejs", "node", "src/server.js"]' "$REL/rollback.override.yml" || { echo 'STOP: rollback would run uncontrolled startup migrations'; exit 2; }
   OLD_B=$(sed -n 's/^    image: \(ai-platform-backend:rollback-[0-9_]*\)$/\1/p' "$REL/rollback.override.yml")
@@ -44,7 +50,9 @@ if [ "$MODE" = docker ]; then
   OLD_F_ID=$(docker image inspect "$OLD_F" --format '{{.Id}}')
   [[ "$OLD_B_ID" =~ ^sha256:[a-f0-9]{64}$ ]] && [[ "$OLD_F_ID" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 2
   # Pin the exact switch file before freeze; never substitute a later edit.
-  cp "$REL/rollback.override.yml" "$EVIDENCE/rollback.override.yml"
+  if [ -n "$COMPAT" ]; then
+    OLD_B_ID=$(node "$EVIDENCE/shared-rollback-bind.cjs" override "$APP" "$REL/compatible-backend.json" "$REL/rollback.override.yml" "$EVIDENCE/rollback.override.yml")
+  else cp "$REL/rollback.override.yml" "$EVIDENCE/rollback.override.yml"; fi
   sha256sum "$EVIDENCE/rollback.override.yml" > "$EVIDENCE/rollback.sha256"
   HEALTH=https://ai.pkuailab.com/health
   gate() {
@@ -53,9 +61,9 @@ if [ "$MODE" = docker ]; then
   }
 else
   [[ "$TARGET" =~ ^[a-f0-9]{40}$ ]] || exit 2
-  git merge-base --is-ancestor "$TARGET" HEAD
+  if [ -z "$COMPAT" ]; then git merge-base --is-ancestor "$TARGET" HEAD; fi
   # The prepared receipt binds the parent; an arbitrary earlier tag is not accepted.
-  node -e 'const fs=require("fs"),p=JSON.parse(fs.readFileSync(process.argv[1]));if(p.parent!==process.argv[2]||p.target!==process.argv[3])process.exit(2)' "$REL/PREPARED.json" "$TARGET" "$(git rev-parse HEAD)"
+  node -e 'const fs=require("fs"),p=JSON.parse(fs.readFileSync(process.argv[1]));if(p.target!==process.argv[3]||(!process.argv[4]&&p.parent!==process.argv[2])||!(/^[a-f0-9]{40}$/.test(p.parent)))process.exit(2)' "$REL/PREPARED.json" "$TARGET" "$(git rev-parse HEAD)" "$COMPAT"
   git show "$TARGET:rebuild.sh" | grep -q REBUILD_KEEP_LOGS || { echo 'STOP: parent cannot preserve logs'; exit 2; }
   HEALTH=https://ai.xingyuncl.com/health
   gate() { ( cd "$APP/backend"; node "$EVIDENCE/gallery-freeze-gate.cjs" "$1" "$APP/backend" "$EVIDENCE" "$APPROVAL" ); }
@@ -82,7 +90,12 @@ else
   REBUILD_KEEP_LOGS=1 bash rebuild.sh --full
 fi
 curl -sf -m 15 "$HEALTH" >/dev/null
+if [ -n "$COMPAT" ]; then
+  for route in /pages/1/rollback-check /api/mindmap/share/1/rollback-check /api/html-editor/pages /api/shared-works; do
+    [ "$(curl -sS -m 15 -o /dev/null -w '%{http_code}' "${HEALTH%/health}$route")" = 503 ] || { echo 'STOP: shared-work maintenance gate not proven; retain lock and freeze'; exit 1; }
+  done
+fi
 gate verify
 printf 'application_rollback_verified=1\npublication_remains_frozen=1\n' > "$EVIDENCE/COMPLETE.txt"
 bash "$APP/dev/docker-release-lock.sh" release "$LOCK" "$TOKEN"
-echo 'Safe application rollback verified; publication remains frozen. No schema or audit was removed.'
+echo 'Safe application rollback verified; gallery publication remains frozen; compatible fallback keeps shared-work modules unavailable. No schema or audit was removed.'

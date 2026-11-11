@@ -122,7 +122,7 @@ make deploy
 
 **唯一具名流程**是`dev/gallery-safe-rollback.sh`，在对应服务器已复核的候选检出中执行。先核原发布命令已确定结束、运行父版/回退目标和本次批准；不知道原任务是否仍运行时不能接管。使用原操作者的原生锁token；若锁未持有才取得同一把锁，绝不抢锁或解锁其他发布。
 
-1. 核回退目标及工具源码。星云父版必须绑定PREPARED回执；北大旧镜像来自该候选发布目录的rollback文件，固定其摘要及镜像ID，禁止旧容器启动额外SQL迁移。
+1. 核回退目标及工具源码。合发版只允许清单固定的兼容回退提交（网页/导图模块503）；星云核PREPARED目标，北大核兼容后端镜像标签、ID和门禁文件摘要，前端仍用该次封存旧镜像，禁止旧容器启动额外SQL迁移。
 2. 使用`gallery-freeze-gate.cjs`事务提交`frozen=1`和对应控制审计。事务提交后重新查MySQL身份、两个CHECK、**八守卫完整定义**、控制状态和最新审计ID/批准引用/理由，写持久FREEZE-VERIFIED回执。只在再次实时回读成功后才允许切旧代码/镜像；不是只看CLI打印或一份旧回执。
 3. 应用回退后核健康、镜像身份并再次核冻结/审计。全部成功才释放自己的锁；任一步失败或结果不明则停住、保留锁及冻结，不自动重试、解冻或恢复公开。回退可能让附带公开记录写入受限，不能承诺无感。
 4. 后续重新发布前必须重建具名运行父版绑定；不能把回退前的current发布记录当成当前运行版本。PM2处于明确父版的detached HEAD时，不自动切main或revert，先按新候选复核。
@@ -130,8 +130,8 @@ make deploy
 以下是**供已批准发布操作者审阅的服务器命令格式**，占位符必须用本次封存值替换；不要求产品负责人自行运行。若产品负责人手动操作，先在终端输入`wsl`回车，提示符变成`hanying@…$`后，再通过WSL中的SSH别名进入对应服务器；不是在PowerShell执行Bash。在服务器`/var/www/ai-platform`中：
 
 ```bash
-bash dev/gallery-safe-rollback.sh docker <本次候选发布目录> recorded-images <真实批准引用> <自己的原生锁token>
-bash dev/gallery-safe-rollback.sh pm2 <本次migration阶段目录> <回执绑定的完整父版SHA> <真实批准引用> <自己的原生锁token>
+bash dev/gallery-safe-rollback.sh docker <本次候选发布目录> compatible-images <真实批准引用> <自己的原生锁token>
+bash dev/gallery-safe-rollback.sh pm2 <本次migration阶段目录> 49e03a4c3767508244063ac597797efbc715cd39 <真实批准引用> <自己的原生锁token>
 ```
 
 本流程不自动恢复数据库dump。恢复库可能覆盖新业务并恢复旧公开状态，必须另做具名数据恢复评估及批准；不得作为六张迁移down的替代捷径。
@@ -205,11 +205,11 @@ make deploy-docker ARGS="--prebuilt=<包目录> --code-only"
 
 ## 九、画廊审核精确迁移（C项工具补充）
 
-此模式是既有原生发布流程的具名扩展。业务源码保持候选 `3079f125`；工具候选必须另经复核，合入同一发布提交后，两站仍同版。参数、清单文件和工具测试都不是批准；生产窗口和A/B权限以原会话为准。
+此模式是既有原生发布流程的具名扩展。画廊与作品分享业务组合候选为 `246508f`；工具候选必须另经复核，合入同一发布提交后，两站仍同版。参数、清单文件和工具测试都不是批准；生产窗口和A/B权限以原会话为准。
 
-- `dev/gallery-migration-plan.json` 固定六张迁移的已复核SHA，禁止夹带额外迁移、修改既有迁移或通过编辑清单放宽边界。`teacher-review`保留旧三张；`gallery-review`只允许11-10新增三张；`gallery-pku`限定六张和获批2图4视频。旧v1迁移回执使用旧工具核验，不能冒充本次v2完成回执。
+- `dev/gallery-migration-plan.json` 固定七张迁移的SHA（原画廊六张不变，新增分享一张须复核），禁止夹带额外迁移、修改既有迁移或通过编辑清单放宽边界。`teacher-review`保留旧三张；`gallery-review`只允许11-10新增三张及11-11分享一张；`gallery-pku`限定七张和获批2图4视频。旧v1迁移回执使用旧工具核验，不能冒充本次v2完成回执。
 - 星云：沿用预置→备份→迁移→应用切换路径，profile进入新回执；备份后按名称逐张 `migrate:up`，每次检查剩余清单。MySQL版本/旧三张账本/启用CHECK先验；完成和切换前都检查8个守卫及CHECK实际拒绝行为。服务代码在迁移阶段保持父版。
-- 北大：`--gallery-review=<真实批准引用>`必须配预构建包和`--keep-history`；禁止`--code-only`、`--allow-ahead`、`-y`。仍先核星云版本、镜像/封存父版、资源及原生锁。发布负责人必须确认除backend外没有其他写者；短停backend并核状态后才捕获六件作品快照、备份和迁移。清单超界/内容漂移/待执行迁移不同/DDL半执行即停止。该模式按六个固定名称执行，不用`migrate:latest`；禁用容器启动SQL迁移，避免带入未批准范围。
+- 北大：`--gallery-review=<真实批准引用>`必须配预构建包和`--keep-history`；禁止`--code-only`、`--allow-ahead`、`-y`。仍先核星云版本、镜像/封存父版、资源及原生锁。发布负责人必须确认除backend外没有其他写者；短停backend并核状态后才捕获六件作品快照、备份和迁移。清单超界/内容漂移/待执行迁移不同/DDL半执行即停止。该模式按七个固定名称执行，不用`migrate:latest`；禁用容器启动SQL迁移，避免带入未批准范围。
 - Docker数据库备份保留routines/triggers，做gzip及SHA校验；SQL真实恢复演练在隔离合成库通过，生产备份仍需本次校验。`gallery-migrations/`保留PLAN、BACKUP、INTENT、逐步STARTED/DONE与COMPLETE；不能以空压缩文件或CLI退出码替代完成证明。任何失败或中断保留原生发布锁供原操作者核实，不自动解锁/重跑。完整远端、运行镜像和公网核验成功后才释放本次锁。`current`不在迁移前指向候选。
 - 半执行时不要运行down、不要恢复六件公开。旧应用回退必须先执行已批准的持久冻结并回读8守卫/控制事件；冻结不可证明时保持必要维护状态并报告。无自动解冻。历史机器回扫写入仍是另一份精确清单批准。
 
@@ -230,3 +230,16 @@ make deploy-docker ARGS="--prebuilt=<核验过的包目录> --keep-history --gal
 `<...>`必须替换为已封存值，不是可直接复制执行的命令。先确认原生迁移工具与业务候选同源；不得把未合入的工具工作树直接当生产main发布。FFmpeg/ffprobe安装与明晚窗口沿本任务A/B批准方案，不由此脚本自动安装或更改配置。
 
 验证入口：`node --test dev/tests/migration-stage.test.cjs`；`python3 dev/tests/gallery-docker-flow.test.py`（Docker模拟，绝不SSH）；本地MySQL3307隔离合成库演练为 `node --test dev/tests/gallery-migrate.mysql.cjs`，凭据仅通过本地`DEV_MYSQL_ROOT_PASSWORD`注入，不能把真实凭据写入命令或提交。
+
+
+## 十、11-11 画廊与作品分享条件合发
+
+业务候选246508f与本工具增量均复核通过、原发布批准补齐分享范围后才能使用。原f0b94画廊单发工具仍留在独立工作树，不能改这份清单来冒充单发。两站最终发布提交必须相同，先星云验后北大；学校校外展示例外未定、真实运行父版/资源/迁移前检任何一项不满足均停止。
+
+兼容回退固定49e03a4c（父版f0b94），只在Express所有路由前加入不可配置关闭的维护门，暂时停用整个网页/导图模块（编辑、发布、分享、列表与举报均503），其他模块沿用父版。不承诺仅停分享、不影响编辑。保留数据库状态/审计及画廊冻结守卫，不恢复撤回链接，不运行结构down。旧recorded-images/任意父版会被拒绝；若冻结门无法提交或验证，维持必要维护状态，不能裸退。
+
+发布操作者在WSL已审工具仓运行 `bash dev/build-shared-rollback.sh --build <全新绝对产物目录>`，只对构建主机本地Docker操作，不连接生产。固定资源门、git archive精确源码、固定候选bundle、后端镜像revision标签与实际文件摘要，输出manifest及SHA256SUMS；失败保留证据、不清理。此构建动作在生产构建主机执行时也须事先获批。不要用运行了旧SQL迁移的默认镜像启动命令来验证。
+
+在获批窗口内、原生锁下，将候选bundle和兼容bundle按摘要取到两站，仅fetch固定对象（不切运行源码），用shared-rollback-bind.cjs source核49提交。北大将兼容包传入 `/var/backups/ai-platform/compatible-rollback/49e03a4c3767508244063ac597797efbc715cd39/`，先核SHA256SUMS，再docker load backend.tar.gz，用image动作核immutable ID、revision标签与两个实际门禁文件。部署工具在停backend之前再次核镜像并把manifest写入本次REL；缺包/漂移则停止。星云预置工具复制四个工具/清单文件并核摘要，每次迁移核验均确认兼容提交对象可用。任何对象搬运本身不证明已部署。
+
+验收新增：旧HTML/导图链接未登录不能取内容；有效本站登录可看已发布作品；本班撤回后非作者拒绝、跨班操作拒绝；重发不复活旧导图令牌；举报可达老师队列；原画廊模型失败入pending、机器reject无法公开等仍全部验证。故障回退在冻结提交及守卫/控制/审计回读成功后切兼容版，再验证健康及四类共享入口503；失败保留锁。原图库/作品文件、OSS ACL和既有积分不动。

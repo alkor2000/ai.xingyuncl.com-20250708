@@ -58,8 +58,8 @@ fi
 LOCAL_SHA=$(git rev-parse --short HEAD)
 TARGET_FULL=$(git rev-parse HEAD)
 STAGE="/var/backups/ai-platform/releases/migration-$TARGET_FULL"
-STAGE_HELPER_SHA=""; STAGE_PLAN_SHA=""; STAGE_VERIFY_SHA=""
-if [ "$PREPARED_MIGRATIONS" = 1 ]; then STAGE_HELPER_SHA=$(sha256sum "$ROOT/dev/migration-stage.cjs" | cut -d' ' -f1); STAGE_PLAN_SHA=$(sha256sum "$ROOT/dev/gallery-migration-plan.json" | cut -d' ' -f1); STAGE_VERIFY_SHA=$(sha256sum "$ROOT/dev/gallery-migrate.cjs" | cut -d' ' -f1); fi
+STAGE_HELPER_SHA=""; STAGE_PLAN_SHA=""; STAGE_VERIFY_SHA=""; STAGE_COMPAT_SHA=""
+if [ "$PREPARED_MIGRATIONS" = 1 ]; then STAGE_COMPAT_SHA=$(sha256sum "$ROOT/dev/shared-rollback-bind.cjs" | cut -d' ' -f1); STAGE_HELPER_SHA=$(sha256sum "$ROOT/dev/migration-stage.cjs" | cut -d' ' -f1); STAGE_PLAN_SHA=$(sha256sum "$ROOT/dev/gallery-migration-plan.json" | cut -d' ' -f1); STAGE_VERIFY_SHA=$(sha256sum "$ROOT/dev/gallery-migrate.cjs" | cut -d' ' -f1); fi
 REMOTE_SHA=$(ssh -n -o BatchMode=yes "$SSH_HOST" "cd $REMOTE_DIR && git rev-parse --short HEAD")
 git merge-base --is-ancestor "$REMOTE_SHA" HEAD || { echo "❌ 首站提交不是本地 HEAD 的祖先，中止。"; exit 1; }
 if [ "$CODE_ONLY" = 1 ]; then
@@ -173,6 +173,7 @@ if [ "$PREPARED_MIGRATIONS" = 1 ]; then
   [ "\$(sha256sum '$STAGE/migration-stage.cjs' | cut -d' ' -f1)" = "$STAGE_HELPER_SHA" ] || { echo 'STOP: staged verifier bytes changed'; exit 1; }
   [ "\$(sha256sum '$STAGE/gallery-migration-plan.json' | cut -d' ' -f1)" = "$STAGE_PLAN_SHA" ] || { echo 'STOP: staged plan bytes changed'; exit 1; }
   [ "\$(sha256sum '$STAGE/gallery-migrate.cjs' | cut -d' ' -f1)" = "$STAGE_VERIFY_SHA" ] || { echo 'STOP: staged database verifier bytes changed'; exit 1; }
+  [ "\$(sha256sum '$STAGE/shared-rollback-bind.cjs' | cut -d' ' -f1)" = "$STAGE_COMPAT_SHA" ] || { echo 'STOP: staged rollback verifier bytes changed'; exit 1; }
   node "$STAGE/migration-stage.cjs" verify-completed "$REMOTE_DIR" "$TARGET_FULL" "$STAGE" || exit 1
 elif [ -n "\$(git status --porcelain)" ]; then
   echo "❌ 服务器工作区不干净（有人直接改了生产文件），中止："; git status --short | head -20; exit 1

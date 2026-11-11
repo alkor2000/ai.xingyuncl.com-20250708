@@ -22,6 +22,8 @@ async function fixture(fn){
    });
    await knex(media+'_generations').insert(plan.historical_public[media].map(id=>({id,user_id:7,is_public:1,prompt:'synthetic',local_path:'/synthetic/'+id,status:'success'})));
   }
+  await knex.schema.createTable('user_mindmaps',t=>{t.increments('id');t.text('content');});
+  await knex('user_mindmaps').insert({content:'synthetic legacy map'});
   await knex.schema.createTable('knex_migrations',t=>{t.increments('id');t.string('name');t.integer('batch');t.timestamp('migration_time');});
   await knex.schema.createTable('knex_migrations_lock',t=>{t.increments('index');t.integer('is_locked');});
   await knex('knex_migrations_lock').insert({is_locked:0});
@@ -32,7 +34,7 @@ async function fixture(fn){
 }
 const backup={sha256:'a'.repeat(64),gzip_verified:true,writers_stopped:true}; // synthetic backup receipt; not a backup restoration test
 
-test('real MySQL: six exact migrations withdraw approved IDs, enforce CHECK and retain audit/guards',async()=>fixture(async(k,d)=>{
+test('real MySQL: seven exact migrations withdraw approved IDs, enforce CHECK and retain audit/guards',async()=>fixture(async(k,d)=>{
  const snapshot=await tool.inspect(k,app);const result=await tool.apply(k,app,d,'local-test-approval',snapshot,backup);
  assert.deepEqual(result,{checks:2,guards:8,frozen:false});assert(fs.existsSync(path.join(d,'COMPLETE.json')));
  assert.equal((await tool.pending(k)).length,0);
@@ -107,7 +109,7 @@ test('actual local mysqldump gzip SHA and restore preserve six-item preimage',as
   } finally {await copy.destroy();}
  }finally{await root.query('DROP DATABASE IF EXISTS '+restore);await root.end();}
 }));
-test('PM2 native prepared flow executes only new three migrations and verifies all guards before completion',async()=>fixture(async(k,d,db)=>{
+test('PM2 native prepared flow executes only new four migrations and verifies all guards before completion',async()=>fixture(async(k,d,db)=>{
  const cp=require('node:child_process'),stage=require('../migration-stage.cjs');
  for(const name of plan.profiles['teacher-review'])await k.migrate.up({name});
  const repo=path.join(d,'repo'),backend=path.join(repo,'backend');fs.mkdirSync(path.join(backend,'scripts'),{recursive:true});
@@ -119,7 +121,7 @@ test('PM2 native prepared flow executes only new three migrations and verifies a
  // Backup execution is a fixture here; real dump/restore has its own test above.
  fs.writeFileSync(path.join(backend,'scripts/db_backup.sh'),'#!/bin/bash\n[ "$BACKUP_RETENTION" = skip ]\n');
  const git=(...args)=>cp.execFileSync('git',['-C',repo,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
- git('init','-q');git('config','user.email','test@invalid.local');git('config','user.name','Local test');
+ git('init','-q');fs.writeFileSync(path.join(repo,'.git/objects/info/alternates'),cp.execFileSync('git',['-C',path.dirname(app),'rev-parse','--path-format=absolute','--git-path','objects'],{encoding:'utf8'}));git('config','user.email','test@invalid.local');git('config','user.name','Local test');
  const newNames=plan.profiles['gallery-review'];
  for(const name of fs.readdirSync(path.join(app,'migrations')).filter(n=>n.endsWith('.js')&&!newNames.includes(n)))fs.copyFileSync(path.join(app,'migrations',name),path.join(backend,'migrations',name));
  git('add','.');git('commit','-qm','synthetic parent');const parent=git('rev-parse','HEAD');
@@ -175,4 +177,15 @@ test('rollback gate refuses missing audit and later control changes while retain
  assert.equal(Number((await k('gallery_publication_control').first()).frozen),1);
  await k('gallery_publication_control').where('id',1).update({frozen:0});
  await assert.rejects(gate.verifyFreeze(k,receipt,'local-rollback-approval'),/unexpected_publication_freeze/);
+}));
+test('sharing schema and ledger drift cannot complete the combined release',async()=>fixture(async(k,d)=>{
+ const snapshot=await tool.inspect(k,app);await tool.apply(k,app,d,'local-test',snapshot,backup);
+ await tool.verifySharedInstalled(k);
+ await k('knex_migrations').where('name',plan.shared_work_migration).delete();
+ await assert.rejects(tool.verifySharedInstalled(k),/missing_shared_ledger/);
+ await k('knex_migrations').insert({name:plan.shared_work_migration,batch:99,migration_time:new Date()});
+ await k.raw("ALTER TABLE user_mindmaps MODIFY share_revision INT UNSIGNED NOT NULL DEFAULT 1");
+ await assert.rejects(tool.verifySharedInstalled(k),/invalid_shared_revision/);
+ // A sharing partial-DDL problem must not prevent the separate gallery freeze gate.
+ assert.deepEqual(await tool.verifyInstalled(k),{checks:2,guards:8,frozen:false});
 }));

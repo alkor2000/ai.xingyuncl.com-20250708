@@ -6,7 +6,7 @@ function fixture(fn){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'gallery-stage-')),repo=path.join(dir,'repo');fs.mkdirSync(repo);
  const git=(...args)=>cp.execFileSync('git',['-C',repo,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
  try {
-  git('init','-q');git('config','user.email','test@invalid.local');git('config','user.name','Local test');
+  git('init','-q');fs.writeFileSync(path.join(repo,'.git/objects/info/alternates'),cp.execFileSync('git',['-C',root,'rev-parse','--path-format=absolute','--git-path','objects'],{encoding:'utf8'}));git('config','user.email','test@invalid.local');git('config','user.name','Local test');
   fs.mkdirSync(path.join(repo,'backend/migrations'),{recursive:true});fs.writeFileSync(path.join(repo,'backend/migrations/.gitkeep'),'');
   git('add','.');git('commit','-qm','parent');const parent=git('rev-parse','HEAD');
   const names=plan.profiles['gallery-review'];for(const n of names)fs.copyFileSync(path.join(root,'backend/migrations',n),path.join(repo,'backend/migrations',n));
@@ -18,7 +18,7 @@ function fixture(fn){
 test('new profile stages only reviewed additions; parent remains unchanged',()=>fixture(x=>{
  const result=stage.prepare(x.repo,x.target,x.evidence,x.parent,'gallery-review');
  assert.equal(result.profile,'gallery-review');assert.equal(x.git('rev-parse','HEAD'),x.parent);
- assert.equal(Object.keys(result.sources).length,3);stage.verify(x.repo,x.target,x.evidence);
+ assert.equal(Object.keys(result.sources).length,4);stage.verify(x.repo,x.target,x.evidence);
 }));
 test('legacy teacher plan cannot silently stage new gallery migrations',()=>fixture(x=>{
  assert.throws(()=>stage.prepare(x.repo,x.target,x.evidence,x.parent),/migration_delta_not_exact_profile/);
@@ -37,4 +37,9 @@ test('changed parent and unknown profile fail before staging',()=>fixture(x=>{
 test('missing completed receipt cannot approve application switching',()=>fixture(x=>{
  stage.prepare(x.repo,x.target,x.evidence,x.parent,'gallery-review');
  assert.throws(()=>stage.verify(x.repo,x.target,x.evidence,true));
+}));
+test('missing compatible fallback object refuses before staging',()=>fixture(x=>{
+ fs.unlinkSync(path.join(x.repo,'.git/objects/info/alternates'));
+ assert.throws(()=>stage.prepare(x.repo,x.target,x.evidence,x.parent,'gallery-review'));
+ assert.equal(x.git('status','--porcelain'),'');assert(!fs.existsSync(path.join(x.evidence,'INTENT.json')));
 }));

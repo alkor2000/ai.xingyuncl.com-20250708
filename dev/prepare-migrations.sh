@@ -16,6 +16,7 @@ LOCK=/var/backups/ai-platform/releases/.lock
 TOKEN="migration-$ACTION-$TARGET-$$-$(date +%s)"
 VERIFY_SHA=$(sha256sum "$ROOT/dev/gallery-migrate.cjs" | cut -d' ' -f1)
 PLAN_SHA=$(sha256sum "$ROOT/dev/gallery-migration-plan.json" | cut -d' ' -f1)
+COMPAT_SHA=$(sha256sum "$ROOT/dev/shared-rollback-bind.cjs" | cut -d' ' -f1)
 HELPER_SHA=$(sha256sum "$ROOT/dev/migration-stage.cjs" | cut -d' ' -f1)
 SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 "$HOST")
 LOCK_HELD=0; REMOTE_TERMINAL=0
@@ -65,13 +66,15 @@ chmod 700 "$1"
 REMOTE
   scp -q -o BatchMode=yes "$BUNDLE" "$HOST:$STAGE/source.bundle"
   scp -q -o BatchMode=yes "$ROOT/dev/migration-stage.cjs" "$HOST:$STAGE/migration-stage.cjs"
+  scp -q -o BatchMode=yes "$ROOT/dev/shared-rollback-bind.cjs" "$HOST:$STAGE/shared-rollback-bind.cjs"
   scp -q -o BatchMode=yes "$ROOT/dev/gallery-migrate.cjs" "$HOST:$STAGE/gallery-migrate.cjs"
   scp -q -o BatchMode=yes "$ROOT/dev/gallery-migration-plan.json" "$HOST:$STAGE/gallery-migration-plan.json"
-  "${SSH[@]}" bash -s -- "$APP" "$STAGE" "$TARGET" "$HELPER_SHA" "$BUNDLE_SHA" "$PARENT" "$PROFILE" "$PLAN_SHA" "$VERIFY_SHA" <<'REMOTE'
+  "${SSH[@]}" bash -s -- "$APP" "$STAGE" "$TARGET" "$HELPER_SHA" "$BUNDLE_SHA" "$PARENT" "$PROFILE" "$PLAN_SHA" "$VERIFY_SHA" "$COMPAT_SHA" <<'REMOTE'
 set -euo pipefail
-APP=$1; STAGE=$2; TARGET=$3; HELPER_SHA=$4; BUNDLE_SHA=$5; PARENT=$6; PROFILE=$7; PLAN_SHA=$8; VERIFY_SHA=$9
+APP=$1; STAGE=$2; TARGET=$3; HELPER_SHA=$4; BUNDLE_SHA=$5; PARENT=$6; PROFILE=$7; PLAN_SHA=$8; VERIFY_SHA=$9; COMPAT_SHA=${10}
 export NVM_DIR="$HOME/.nvm"; [ ! -s "$NVM_DIR/nvm.sh" ] || . "$NVM_DIR/nvm.sh"
 [ "$(sha256sum "$STAGE/migration-stage.cjs" | cut -d' ' -f1)" = "$HELPER_SHA" ]
+[ "$(sha256sum "$STAGE/shared-rollback-bind.cjs" | cut -d' ' -f1)" = "$COMPAT_SHA" ]
 [ "$(sha256sum "$STAGE/gallery-migrate.cjs" | cut -d' ' -f1)" = "$VERIFY_SHA" ]
 [ "$(sha256sum "$STAGE/gallery-migration-plan.json" | cut -d' ' -f1)" = "$PLAN_SHA" ]
 [ "$(sha256sum "$STAGE/source.bundle" | cut -d' ' -f1)" = "$BUNDLE_SHA" ]
@@ -85,12 +88,13 @@ REMOTE
   echo "迁移预置完成；本地bundle保留供核验: $BUNDLE"
   echo '下一步在同一候选目录执行 make migrate ARGS=--prepared；尚未执行数据库迁移。'
 else
-  "${SSH[@]}" bash -s -- "$APP" "$STAGE" "$TARGET" "$HELPER_SHA" "$TOKEN" "$PLAN_SHA" "$VERIFY_SHA" <<'REMOTE'
+  "${SSH[@]}" bash -s -- "$APP" "$STAGE" "$TARGET" "$HELPER_SHA" "$TOKEN" "$PLAN_SHA" "$VERIFY_SHA" "$COMPAT_SHA" <<'REMOTE'
 set -euo pipefail
 export NVM_DIR="$HOME/.nvm"; [ ! -s "$NVM_DIR/nvm.sh" ] || . "$NVM_DIR/nvm.sh"
 [ "$(sha256sum "$2/migration-stage.cjs" | cut -d' ' -f1)" = "$4" ]
 [ "$(sha256sum "$2/gallery-migration-plan.json" | cut -d' ' -f1)" = "$6" ]
 [ "$(sha256sum "$2/gallery-migrate.cjs" | cut -d' ' -f1)" = "$7" ]
+[ "$(sha256sum "$2/shared-rollback-bind.cjs" | cut -d' ' -f1)" = "$8" ]
 node "$2/migration-stage.cjs" begin "$1" "$3" "$2" "$5"
 REMOTE
   if make -C "$ROOT" migrate-native SSH_HOST="$HOST" REMOTE_DIR="$APP" BACKUP_RETENTION=skip PREPARED_TARGET="$TARGET" PREPARED_TOKEN="$TOKEN"; then

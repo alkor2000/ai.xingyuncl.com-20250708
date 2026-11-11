@@ -50,6 +50,10 @@ async function inspect(knex,app) {
   ensure(JSON.stringify(names)===JSON.stringify([...plan.profiles['gallery-pku']].sort()),'pending_migration_scope_changed');
   exactPublic(rows);
   for(const table of ['image_safety_references','image_safety','image_safety_events','image_safety_restrictions','image_safety_reports','video_safety','video_safety_events','video_safety_reports','gallery_machine_reviews','gallery_publication_control','gallery_publication_control_events','gallery_scan_actions'])ensure(!await knex.schema.hasTable(table),'partial_schema_requires_review');
+  if (plan.shared_work_migration) {
+    for (const t of ['shared_work_reports','shared_work_events']) ensure(!await knex.schema.hasTable(t),'partial_shared_schema_requires_review');
+    ensure(!await knex.schema.hasColumn('user_mindmaps','share_state') && !await knex.schema.hasColumn('user_mindmaps','share_revision'),'partial_shared_schema_requires_review');
+  }
   return {version:1,server,source,pending:names,public:rows};
 }
 async function verifyInstalled(knex, expectedFrozen = false) {
@@ -67,6 +71,15 @@ async function verifyInstalled(knex, expectedFrozen = false) {
   const control=await knex('gallery_publication_control').where('id',1).first();
   ensure(control&&[0,1].includes(Number(control.frozen))&&(expectedFrozen===null||Number(control.frozen)===Number(expectedFrozen)),'unexpected_publication_freeze');
   return {checks:2,guards:8,frozen:!!Number(control.frozen)};
+}
+async function verifySharedInstalled(knex) {
+  if (!plan.shared_work_migration) return;
+  for (const table of ['shared_work_reports','shared_work_events']) ensure(await knex.schema.hasTable(table),'missing_shared_table');
+  const [columns]=await knex.raw("SELECT COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE,COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='user_mindmaps' AND COLUMN_NAME IN ('share_state','share_revision')");
+  const state=columns.find(c=>c.COLUMN_NAME==='share_state'),revision=columns.find(c=>c.COLUMN_NAME==='share_revision');
+  ensure(state&&state.COLUMN_TYPE==="enum('draft','published','withdrawn')"&&state.IS_NULLABLE==='NO'&&state.COLUMN_DEFAULT==='published','invalid_shared_state');
+  ensure(revision&&revision.COLUMN_TYPE==='int unsigned'&&revision.IS_NULLABLE==='NO'&&String(revision.COLUMN_DEFAULT)==='0','invalid_shared_revision');
+  ensure((await knex('knex_migrations').where('name',plan.shared_work_migration)).length===1,'missing_shared_ledger');
 }
 async function checkEnforcement(knex) {
   // A disposable TEMPORARY table, never a real work; same pooled connection throughout.
@@ -100,6 +113,7 @@ async function apply(knex,app,dir,approval,expected,backup) {
   }
   ensure((await pending(knex)).length===0,'migrations_still_pending');
   const verified=await verifyInstalled(knex);
+  await verifySharedInstalled(knex);
   for(const media of ['image','video']) {
     const ids=plan.historical_public[media];
     const rows=await knex(media+'_generations').select('id','is_public').whereIn('id',ids).orderBy('id');
@@ -111,7 +125,7 @@ async function apply(knex,app,dir,approval,expected,backup) {
   save(dir,'COMPLETE.json',{approval,verified,migrations:plan.profiles['gallery-pku'],historical:plan.historical_public});
   return verified;
 }
-module.exports={inspect,apply,verifyInstalled,checkEnforcement,pending,files,save,digest,exactPublic,supported};
+module.exports={inspect,apply,verifyInstalled,verifySharedInstalled,checkEnforcement,pending,files,save,digest,exactPublic,supported};
 if(require.main===module) {
   (async()=>{
     const [action,app,dir,approval]=process.argv.slice(2);
