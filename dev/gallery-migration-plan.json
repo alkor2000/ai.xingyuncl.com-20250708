@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "business_candidate": "246508f10b76bc4a79722a407ee91a3b39e1195d",
+  "business_candidate": "b8254c38392521c622b69b7668f093431ab340a9",
   "migrations": [
     {
       "name": "20261105_001_image_safety.js",
