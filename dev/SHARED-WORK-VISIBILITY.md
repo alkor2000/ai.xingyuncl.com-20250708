@@ -20,3 +20,7 @@
 `node backend/src/__tests__/integration/sharedWorks.standalone.cjs`仅连接本机127.0.0.1:3307，从practice-mysql本机容器取得测试凭据（不输出），创建独立share_visibility_test_*数据库并finally删除。使用真实MySQL、事务、JWT中间件、路由与服务；账号查询用合成身份替身、Redis黑名单关闭，未验证真实生产账号。覆盖有数据迁移回退、旧链接、登录拒绝、跨班拒绝、CAS并发、举报隔离、撤回与重发、HTML发布计费/0积分与撤回不动积分。无需真实账号、媒体或模型。
 
 前端完整构建；本机浏览器检查与截图见任务output证据，不能当作真实学校账号验收。匿名链接两站数量未核实（本卡禁止连生产），不填0；上线前由已有生产只读授权环节统计HTML已发布数，以及思维导图可能存在旧链接的记录上界，不能声称得到实际发出的URL数。学校校外展示例外仍由产品负责人上线前确认。
+
+## 独立复核修复：共享导图执行边界
+
+共享SVG一律空sandbox iframe，事件属性不再进入登录页面DOM。共享Mermaid在strict模式生成（secure配置阻止指令降级），输出也进空sandbox；不会用会删正常foreignObject文字的净化方式处理结果。Markdown的每个markmap节点标签在插入DOM前用既有DOMPurify净化，阻止事件属性及javascript链接。普通编辑预览未启用isolated时沿用原行为，本补丁不宣称全站所有SVG入口已审计。增量浏览器反例包含SVG onerror/onclick/script、Markdown事件/链接、Mermaid securityLevel降级指令，并确认三种正常内容可见；证据见output/share-visibility-fix-20261111。

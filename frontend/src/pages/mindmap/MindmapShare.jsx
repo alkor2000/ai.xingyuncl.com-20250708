@@ -39,6 +39,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Transformer } from 'markmap-lib';
 import { Markmap } from 'markmap-view';
+import DOMPurify from 'dompurify';
 import MermaidPreview from './components/MermaidPreview';
 import SvgPreview from './components/SvgPreview';
 import apiClient from '../../utils/api';
@@ -194,6 +195,12 @@ const MindmapShare = () => {
     try {
       const transformer = new Transformer();
       const { root } = transformer.transform(data.content);
+      // Markmap inserts node labels as HTML; clean every label before it reaches the DOM.
+      const cleanLabels = (node) => {
+        node.content = DOMPurify.sanitize(node.content || '', { USE_PROFILES: { html: true } });
+        (node.children || []).forEach(cleanLabels);
+      };
+      cleanLabels(root);
       svgRef.current.innerHTML = '';
 
       const options = {
@@ -324,8 +331,8 @@ const MindmapShare = () => {
           }}
         >
           {data.content_type === 'mermaid'
-            ? <MermaidPreview code={data.content} />
-            : <SvgPreview code={data.content} />}
+            ? <MermaidPreview code={data.content} isolated />
+            : <SvgPreview code={data.content} isolated />}
         </div>
       </div>
     );
