@@ -20,6 +20,7 @@
  * 5. 300ms 防抖
  */
 
+import SvgPreview from './SvgPreview';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Spin, Empty } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -42,11 +43,13 @@ const RENDER_DEBOUNCE_MS = 300;
  * 注意：fontFamily 中的字体名（PingFang SC / Microsoft YaHei）是
  * 字体资源标识而非界面文案，不参与 i18n。
  */
-const initMermaid = () => {
+const initMermaid = (isolated = false) => {
   mermaid.initialize({
     startOnLoad: false,
     theme: 'default',
-    securityLevel: 'loose',
+    securityLevel: isolated ? 'strict' : 'loose',
+    // User diagram directives cannot relax the shared-page security mode.
+    ...(isolated ? { secure: ['securityLevel', 'secure', 'startOnLoad', 'maxTextSize', 'maxEdges'] } : {}),
     fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
     flowchart: {
       useMaxWidth: false,
@@ -70,11 +73,13 @@ const initMermaid = () => {
   });
 };
 
-const MermaidPreview = ({ code }) => {
+// Shared works use strict generation and a script-free opaque-origin output frame.
+const MermaidPreview = ({ code, isolated = false }) => {
   const { t } = useTranslation();
   const containerRef = useRef(null);
   const renderTimeoutRef = useRef(null);
   const [loading, setLoading] = useState(false);
+  const [isolatedSvg, setIsolatedSvg] = useState('');
   const [isEmpty, setIsEmpty] = useState(false);
   /**
    * 错误状态结构: { key: 'i18n键', detail: 'mermaid原始报错' }
@@ -84,8 +89,8 @@ const MermaidPreview = ({ code }) => {
 
   /* 首次挂载时初始化 mermaid */
   useEffect(() => {
-    initMermaid();
-  }, []);
+    initMermaid(isolated);
+  }, [isolated]);
 
   /**
    * 清理 mermaid 遗留的临时 DOM 节点
@@ -136,13 +141,15 @@ const MermaidPreview = ({ code }) => {
       globalRenderCount += 1;
       const id = `mm-${globalRenderCount}`;
 
+      if (isolated) initMermaid(true);
       const { svg } = await mermaid.render(id, mermaidCode);
 
       /* render 后可能产生新的临时节点，再清一次 */
       cleanupMermaidDOM();
 
       if (containerRef.current) {
-        containerRef.current.innerHTML = svg;
+        if (isolated) setIsolatedSvg(svg);
+        else containerRef.current.innerHTML = svg;
 
         /* 优化 SVG 显示：补 viewBox 并改为自适应宽度居中 */
         const svgEl = containerRef.current.querySelector('svg');
@@ -174,7 +181,7 @@ const MermaidPreview = ({ code }) => {
 
       /* 重试：重新 initialize 以清理 mermaid 内部脏状态 */
       if (retryCount < MAX_RETRY) {
-        initMermaid();
+        initMermaid(isolated);
         cleanupMermaidDOM();
         setTimeout(() => {
           doRender(mermaidCode, retryCount + 1);
@@ -193,7 +200,7 @@ const MermaidPreview = ({ code }) => {
         containerRef.current.innerHTML = '';
       }
     }
-  }, [cleanupMermaidDOM]);
+  }, [cleanupMermaidDOM, isolated]);
 
   /* 监听 code 变化，防抖后渲染 */
   useEffect(() => {
@@ -201,6 +208,7 @@ const MermaidPreview = ({ code }) => {
       clearTimeout(renderTimeoutRef.current);
     }
 
+    if (isolated) setIsolatedSvg('');
     /* 空代码：直接进入空状态，不触发渲染 */
     if (!code || code.trim() === '') {
       setIsEmpty(true);
@@ -225,7 +233,7 @@ const MermaidPreview = ({ code }) => {
         clearTimeout(renderTimeoutRef.current);
       }
     };
-  }, [code, doRender]);
+  }, [code, doRender, isolated]);
 
   /* 组件卸载时清理遗留 DOM */
   useEffect(() => {
@@ -274,8 +282,9 @@ const MermaidPreview = ({ code }) => {
       <div
         ref={containerRef}
         className="mermaid-preview-content"
-        style={{ opacity: loading ? 0 : 1 }}
+        style={{ opacity: loading ? 0 : 1, display: isolated ? 'none' : undefined }}
       />
+      {isolated && isolatedSvg && <SvgPreview code={isolatedSvg} isolated />}
     </div>
   );
 };

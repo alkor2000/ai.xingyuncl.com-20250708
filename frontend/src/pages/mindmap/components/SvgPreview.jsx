@@ -16,7 +16,8 @@
  *    作为 detail 插入 errorSyntax 句式中展示。
  *
  * ===== 功能说明（逻辑与 v2.0 完全一致，未做行为变更）=====
- * 1. 简单 SVG 直接 innerHTML 插入（不用 DOMPurify，避免合法属性被过度清理）
+ * 分享页 isolated 模式无条件使用空 sandbox；不以内容复杂度判断安全。
+ * 1. 非分享编辑预览的简单 SVG 直接 innerHTML 插入（不用 DOMPurify，避免合法属性被过度清理）
  * 2. 复杂 SVG（含 style/foreignObject/script）用 iframe 空 sandbox 隔离渲染
  * 3. 自动补全 viewBox/width/height 确保缩放正确
  * 4. 解析失败显示友好提示而非空白
@@ -40,7 +41,7 @@ const IFRAME_MAX_HEIGHT = 900;
 const DEFAULT_SVG_WIDTH = 800;
 const DEFAULT_SVG_HEIGHT = 600;
 
-const SvgPreview = ({ code, onError }) => {
+const SvgPreview = ({ code, onError, isolated = false }) => {
   const { t } = useTranslation();
   const containerRef = useRef(null);
   const renderTimeoutRef = useRef(null);
@@ -253,7 +254,8 @@ ${svgCode}
 
     renderTimeoutRef.current = setTimeout(() => {
       try {
-        if (isComplexSvg(code)) {
+        // Shared works are untrusted even without script tags (onerror/onclick etc.).
+        if (isolated || isComplexSvg(code)) {
           renderWithIframe(code);
         } else {
           renderSimpleSvg(code);
@@ -275,7 +277,7 @@ ${svgCode}
         clearTimeout(renderTimeoutRef.current);
       }
     };
-  }, [code, onError, isComplexSvg, renderSimpleSvg, renderWithIframe]);
+  }, [code, onError, isolated, isComplexSvg, renderSimpleSvg, renderWithIframe]);
 
   /**
    * 组装错误正文
