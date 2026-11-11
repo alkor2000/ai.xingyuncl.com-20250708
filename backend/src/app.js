@@ -53,6 +53,8 @@ const docTemplateRoutes = require('./routes/docTemplateRoutes');
 
 /* 创建 Express 应用 */
 const app = express();
+// Rollback safety gate must precede every router, including legacy anonymous links.
+app.use(require('./middleware/sharedWorkRollbackGate'));
 
 /* ============================================================
  * 基础中间件配置
