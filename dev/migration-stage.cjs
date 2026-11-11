@@ -107,6 +107,7 @@ async function galleryPrerequisites(repo, record, probe = false) {
     assert(rows.length === 2 && rows.every(r => r.ENFORCED === 'YES'), 'prior_teacher_checks_missing');
     const prior = await knex('knex_migrations').whereIn('name', plans.profiles['teacher-review']).select('name');
     assert(prior.length === 3, 'prior_teacher_migrations_missing');
+    await check.verifySharedPreimage(knex);
     if (probe) await check.checkEnforcement(knex);
   } finally { await knex.destroy(); }
 }
@@ -147,6 +148,8 @@ async function nativeMigration(repo, target, dir, token) {
   for (const [phase, command, args] of commands) {
     verify(repo, target, dir);
     assert(JSON.stringify(await pendingNames(repo)) === JSON.stringify(selected.slice(migrated).sort()), 'pending_migrations_drift');
+    // Recheck immediately before the sharing DDL as well as begin/after-backup.
+    if (phase === plans.shared_work_migration) await galleryPrerequisites(repo, record);
     const child = cp.spawnSync(command, args, {
       cwd: path.join(repo, 'backend'), stdio: ['ignore', 'inherit', 'inherit'],
       env: {...process.env, APP_DIR: repo, BACKUP_RETENTION: 'skip'}

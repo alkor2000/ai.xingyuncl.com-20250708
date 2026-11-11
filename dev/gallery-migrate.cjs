@@ -50,10 +50,7 @@ async function inspect(knex,app) {
   ensure(JSON.stringify(names)===JSON.stringify([...plan.profiles['gallery-pku']].sort()),'pending_migration_scope_changed');
   exactPublic(rows);
   for(const table of ['image_safety_references','image_safety','image_safety_events','image_safety_restrictions','image_safety_reports','video_safety','video_safety_events','video_safety_reports','gallery_machine_reviews','gallery_publication_control','gallery_publication_control_events','gallery_scan_actions'])ensure(!await knex.schema.hasTable(table),'partial_schema_requires_review');
-  if (plan.shared_work_migration) {
-    for (const t of ['shared_work_reports','shared_work_events']) ensure(!await knex.schema.hasTable(t),'partial_shared_schema_requires_review');
-    ensure(!await knex.schema.hasColumn('user_mindmaps','share_state') && !await knex.schema.hasColumn('user_mindmaps','share_revision'),'partial_shared_schema_requires_review');
-  }
+  await verifySharedPreimage(knex);
   return {version:1,server,source,pending:names,public:rows};
 }
 async function verifyInstalled(knex, expectedFrozen = false) {
@@ -72,9 +69,51 @@ async function verifyInstalled(knex, expectedFrozen = false) {
   ensure(control&&[0,1].includes(Number(control.frozen))&&(expectedFrozen===null||Number(control.frozen)===Number(expectedFrozen)),'unexpected_publication_freeze');
   return {checks:2,guards:8,frozen:!!Number(control.frozen)};
 }
+// Only a pristine pending migration may enter this release path. Never repair partial DDL.
+async function verifySharedPreimage(knex) {
+  if (!plan.shared_work_migration) return;
+  ensure((await knex('knex_migrations').where('name',plan.shared_work_migration)).length===0,'shared_migration_already_recorded');
+  ensure(await knex.schema.hasTable('user_mindmaps'),'missing_mindmap_preimage');
+  for (const table of ['shared_work_reports','shared_work_events']) ensure(!await knex.schema.hasTable(table),'partial_shared_schema_requires_review');
+  for (const column of ['share_state','share_revision']) ensure(!await knex.schema.hasColumn('user_mindmaps',column),'partial_shared_schema_requires_review');
+}
+async function verifySharedTables(knex) {
+  const common={id:['bigint unsigned','NO',null,'auto_increment'],work_type:["enum('html','mindmap')",'NO',null,''],work_id:['bigint unsigned','NO',null,'']};
+  const timestamp=['timestamp','YES','CURRENT_TIMESTAMP','default_generated'];
+  const expected={
+    shared_work_reports:{columns:{...common,user_id:['bigint unsigned','NO',null,''],reason:['varchar(500)','NO',null,''],created_at:timestamp,resolved_at:['timestamp','YES',null,'']},indexes:['0:id','0:work_type,work_id,user_id'],constraints:['PRIMARY KEY','UNIQUE']},
+    shared_work_events:{columns:{...common,actor_id:['bigint unsigned','NO',null,''],action:['varchar(32)','NO',null,''],created_at:timestamp},indexes:['0:id','1:work_type,work_id'],constraints:['PRIMARY KEY']}
+  };
+  for (const [table,spec] of Object.entries(expected)) {
+    const [[info]]=await knex.raw('SELECT ENGINE,TABLE_TYPE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[table]);
+    ensure(info&&info.ENGINE==='InnoDB'&&info.TABLE_TYPE==='BASE TABLE','invalid_shared_table');
+    const [columns]=await knex.raw('SELECT COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE,COLUMN_DEFAULT,EXTRA,GENERATION_EXPRESSION FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',[table]);
+    ensure(columns.length===Object.keys(spec.columns).length,'invalid_shared_columns');
+    for (const [name,want] of Object.entries(spec.columns)) {
+      const column=columns.find(c=>c.COLUMN_NAME===name);
+      // MySQL 8.0.16 includes integer display widths; newer 8.0 releases omit them.
+      const type=column?.COLUMN_TYPE.toLowerCase().replace(/\b(bigint|int)\(\d+\)/g,'$1');
+      const value=column?.COLUMN_DEFAULT==null?null:String(column.COLUMN_DEFAULT).toUpperCase().replace(/\(\)$/,'');
+      ensure(column&&type===want[0]&&column.IS_NULLABLE===want[1]&&value===want[2]&&column.EXTRA.toLowerCase()===want[3]&&!column.GENERATION_EXPRESSION,'invalid_shared_column_'+name);
+    }
+    const [rows]=await knex.raw('SELECT INDEX_NAME,NON_UNIQUE,SEQ_IN_INDEX,COLUMN_NAME,SUB_PART,INDEX_TYPE,IS_VISIBLE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? ORDER BY INDEX_NAME,SEQ_IN_INDEX',[table]);
+    const groups=new Map();
+    for (const row of rows) {
+      ensure(row.SUB_PART==null&&row.INDEX_TYPE==='BTREE'&&row.IS_VISIBLE==='YES','invalid_shared_index');
+      if (!groups.has(row.INDEX_NAME)) groups.set(row.INDEX_NAME,[]);
+      groups.get(row.INDEX_NAME).push(row);
+    }
+    const primary=groups.get('PRIMARY');
+    ensure(primary&&primary.length===1&&primary[0].COLUMN_NAME==='id'&&Number(primary[0].NON_UNIQUE)===0,'invalid_shared_primary_key');
+    const actual=[...groups.values()].map(group=>String(group[0].NON_UNIQUE)+':'+group.map(row=>row.COLUMN_NAME).join(',')).sort();
+    ensure(JSON.stringify(actual)===JSON.stringify([...spec.indexes].sort()),'invalid_shared_indexes');
+    const [constraints]=await knex.raw('SELECT CONSTRAINT_TYPE FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME=?',[table]);
+    ensure(JSON.stringify(constraints.map(c=>c.CONSTRAINT_TYPE).sort())===JSON.stringify([...spec.constraints].sort()),'invalid_shared_constraints');
+  }
+}
 async function verifySharedInstalled(knex) {
   if (!plan.shared_work_migration) return;
-  for (const table of ['shared_work_reports','shared_work_events']) ensure(await knex.schema.hasTable(table),'missing_shared_table');
+  await verifySharedTables(knex);
   const [columns]=await knex.raw("SELECT COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE,COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='user_mindmaps' AND COLUMN_NAME IN ('share_state','share_revision')");
   const state=columns.find(c=>c.COLUMN_NAME==='share_state'),revision=columns.find(c=>c.COLUMN_NAME==='share_revision');
   ensure(state&&state.COLUMN_TYPE==="enum('draft','published','withdrawn')"&&state.IS_NULLABLE==='NO'&&state.COLUMN_DEFAULT==='published','invalid_shared_state');
@@ -125,7 +164,7 @@ async function apply(knex,app,dir,approval,expected,backup) {
   save(dir,'COMPLETE.json',{approval,verified,migrations:plan.profiles['gallery-pku'],historical:plan.historical_public});
   return verified;
 }
-module.exports={inspect,apply,verifyInstalled,verifySharedInstalled,checkEnforcement,pending,files,save,digest,exactPublic,supported};
+module.exports={inspect,apply,verifyInstalled,verifySharedPreimage,verifySharedInstalled,checkEnforcement,pending,files,save,digest,exactPublic,supported};
 if(require.main===module) {
   (async()=>{
     const [action,app,dir,approval]=process.argv.slice(2);

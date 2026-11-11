@@ -109,7 +109,7 @@ test('actual local mysqldump gzip SHA and restore preserve six-item preimage',as
   } finally {await copy.destroy();}
  }finally{await root.query('DROP DATABASE IF EXISTS '+restore);await root.end();}
 }));
-test('PM2 native prepared flow executes only new four migrations and verifies all guards before completion',async()=>fixture(async(k,d,db)=>{
+async function pm2Fixture(k,d,db,fn) {
  const cp=require('node:child_process'),stage=require('../migration-stage.cjs');
  for(const name of plan.profiles['teacher-review'])await k.migrate.up({name});
  const repo=path.join(d,'repo'),backend=path.join(repo,'backend');fs.mkdirSync(path.join(backend,'scripts'),{recursive:true});
@@ -132,6 +132,13 @@ test('PM2 native prepared flow executes only new four migrations and verifies al
  process.env.GALLERY_LOCAL_TEST_DB=db;process.env.NODE_ENV='development';
  try {
   stage.prepare(repo,target,evidence,parent,'gallery-review');
+  await fn({stage,repo,target,evidence,parent,git});
+ }finally{
+  if(oldDB===undefined)delete process.env.GALLERY_LOCAL_TEST_DB;else process.env.GALLERY_LOCAL_TEST_DB=oldDB;
+  if(oldMode===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=oldMode;
+ }
+}
+test('PM2 native prepared flow executes only new four migrations and verifies all guards before completion',async()=>fixture(async(k,d,db)=>pm2Fixture(k,d,db,async({stage,repo,target,evidence,parent,git})=>{
   await stage.run('begin',repo,target,evidence,'local-attempt');
   await stage.run('native',repo,target,evidence,'local-attempt');
   await stage.run('complete',repo,target,evidence,'local-attempt');
@@ -140,11 +147,7 @@ test('PM2 native prepared flow executes only new four migrations and verifies al
   assert.equal((await tool.pending(k)).length,0);
   assert.deepEqual(await tool.verifyInstalled(k),{checks:2,guards:8,frozen:false});
   assert.equal(git('rev-parse','HEAD'),parent,'native migrations must not switch application code');
- }finally{
-  if(oldDB===undefined)delete process.env.GALLERY_LOCAL_TEST_DB;else process.env.GALLERY_LOCAL_TEST_DB=oldDB;
-  if(oldMode===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=oldMode;
- }
-}));
+})));
 test('same-name freeze trigger with weakened condition is rejected',async()=>fixture(async(k,d)=>{
  const snapshot=await tool.inspect(k,app);await tool.apply(k,app,d,'local-test',snapshot,backup);
  await k.raw('DROP TRIGGER image_safety_freeze_update');
@@ -188,4 +191,60 @@ test('sharing schema and ledger drift cannot complete the combined release',asyn
  await assert.rejects(tool.verifySharedInstalled(k),/invalid_shared_revision/);
  // A sharing partial-DDL problem must not prevent the separate gallery freeze gate.
  assert.deepEqual(await tool.verifyInstalled(k),{checks:2,guards:8,frozen:false});
+}));
+
+for (const residue of ['reports','events','state','revision','full-schema']) {
+ test('PM2 begin refuses pending sharing residue: '+residue,async()=>fixture(async(k,d,db)=>pm2Fixture(k,d,db,async({stage,repo,target,evidence})=>{
+  if (residue==='reports'||residue==='events') await k.schema.createTable('shared_work_'+residue,t=>t.increments('id'));
+  else if (residue==='full-schema') await require('../../backend/migrations/'+plan.shared_work_migration).up(k);
+  else await k.schema.alterTable('user_mindmaps',t=>t.string('share_'+residue));
+  const before=await k('knex_migrations').select('*').orderBy('id');
+  await assert.rejects(stage.run('begin',repo,target,evidence,'residue-attempt'),/partial_shared_schema_requires_review/);
+  for (const receipt of ['RUNNING.json','NATIVE-RUNNING.json','MIGRATED.json','COMPLETE']) assert(!fs.existsSync(path.join(evidence,receipt)));
+  assert.deepEqual(await k('knex_migrations').select('*').orderBy('id'),before);
+  assert.equal((await tool.pending(k)).length,4);
+  assert.equal((await k('user_mindmaps').first()).content,'synthetic legacy map');
+ })));
+}
+test('PM2 residue introduced after begin stops after backup, before any new DDL',async()=>fixture(async(k,d,db)=>pm2Fixture(k,d,db,async({stage,repo,target,evidence})=>{
+ await stage.run('begin',repo,target,evidence,'race-attempt');
+ await k.schema.createTable('shared_work_reports',t=>t.increments('id'));
+ await assert.rejects(stage.run('native',repo,target,evidence,'race-attempt'),/partial_shared_schema_requires_review/);
+ assert(fs.existsSync(path.join(evidence,'NATIVE-RUNNING.json')));
+ assert(!fs.existsSync(path.join(evidence,'COMPLETE')));assert.equal((await tool.pending(k)).length,4);
+})));
+test('PM2 completion rejects malformed report table and does not issue COMPLETE',async()=>fixture(async(k,d,db)=>pm2Fixture(k,d,db,async({stage,repo,target,evidence})=>{
+ await stage.run('begin',repo,target,evidence,'completion-attempt');
+ await stage.run('native',repo,target,evidence,'completion-attempt');
+ await k.schema.alterTable('shared_work_reports',t=>t.dropColumn('reason'));
+ await assert.rejects(stage.run('complete',repo,target,evidence,'completion-attempt'),/invalid_shared_columns/);
+ assert(!fs.existsSync(path.join(evidence,'COMPLETE')));assert(!fs.existsSync(path.join(evidence,'MIGRATED.json')));
+ assert.equal((await tool.pending(k)).length,0,'ledger alone must not prove readiness');
+})));
+test('PM2 application switching rejects a changed constraint despite a prior COMPLETE receipt',async()=>fixture(async(k,d,db)=>pm2Fixture(k,d,db,async({stage,repo,target,evidence})=>{
+ await stage.run('begin',repo,target,evidence,'switch-attempt');await stage.run('native',repo,target,evidence,'switch-attempt');await stage.run('complete',repo,target,evidence,'switch-attempt');
+ await k('shared_work_reports').insert({work_type:'mindmap',work_id:1,user_id:7,reason:'synthetic retained report'});
+ await k.schema.alterTable('shared_work_reports',t=>t.dropUnique(['work_type','work_id','user_id']));
+ await assert.rejects(stage.run('verify-completed',repo,target,evidence),/invalid_shared_indexes/);
+ assert(fs.existsSync(path.join(evidence,'COMPLETE')),'preserve original evidence, do not rewrite it');
+ assert.equal((await k('shared_work_reports').first()).reason,'synthetic retained report');
+})));
+test('shared completion validates required column types, nullability, defaults, primary/unique/event indexes and transaction engine',async()=>fixture(async(k,d)=>{
+ await tool.apply(k,app,d,'local-test',await tool.inspect(k,app),backup);
+ const cases=[
+  ["ALTER TABLE shared_work_reports MODIFY reason VARCHAR(20) NOT NULL","ALTER TABLE shared_work_reports MODIFY reason VARCHAR(500) NOT NULL"],
+  ["ALTER TABLE shared_work_reports MODIFY reason VARCHAR(500) NULL","ALTER TABLE shared_work_reports MODIFY reason VARCHAR(500) NOT NULL"],
+  ["ALTER TABLE shared_work_events MODIFY action VARCHAR(64) NOT NULL","ALTER TABLE shared_work_events MODIFY action VARCHAR(32) NOT NULL"],
+  ["ALTER TABLE shared_work_events MODIFY actor_id BIGINT NOT NULL","ALTER TABLE shared_work_events MODIFY actor_id BIGINT UNSIGNED NOT NULL"],
+  ["ALTER TABLE shared_work_reports MODIFY created_at TIMESTAMP NULL DEFAULT NULL","ALTER TABLE shared_work_reports MODIFY created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP"],
+  ["ALTER TABLE shared_work_reports DROP INDEX shared_work_reports_work_type_work_id_user_id_unique","ALTER TABLE shared_work_reports ADD UNIQUE INDEX shared_work_reports_work_type_work_id_user_id_unique(work_type,work_id,user_id)"],
+  ["ALTER TABLE shared_work_events DROP INDEX shared_work_events_work_type_work_id_index","ALTER TABLE shared_work_events ADD INDEX shared_work_events_work_type_work_id_index(work_type,work_id)"],
+  ["ALTER TABLE shared_work_events MODIFY id BIGINT UNSIGNED NOT NULL","ALTER TABLE shared_work_events MODIFY id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT"],
+  ["ALTER TABLE shared_work_reports ENGINE=MyISAM","ALTER TABLE shared_work_reports ENGINE=InnoDB"]
+ ];
+ for(const [mutate,restore] of cases){await k.raw(mutate);await assert.rejects(tool.verifySharedInstalled(k),/invalid_shared_/);await k.raw(restore);await tool.verifySharedInstalled(k);}
+ await k('shared_work_reports').insert({work_type:'mindmap',work_id:1,user_id:7,reason:'normal reporting works'});
+ await assert.rejects(k('shared_work_reports').insert({work_type:'mindmap',work_id:1,user_id:7,reason:'duplicate'}),e=>e.code==='ER_DUP_ENTRY');
+ await k('shared_work_events').insert({work_type:'mindmap',work_id:1,actor_id:7,action:'report'});
+ assert.equal((await k('shared_work_events').first()).action,'report');
 }));
