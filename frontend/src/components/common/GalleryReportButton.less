@@ -1,0 +1,27 @@
+// Opaque paired colors keep this shared image/video action readable over media
+// and independent of the gallery's white icon-button colors and theme palette.
+.gallery-report-control > .ant-btn.gallery-report-button {
+  color: #7a1730;
+  background: #fff;
+  border-color: #7a1730;
+
+  &:not(:disabled):hover,
+  &:not(:disabled):active,
+  &:not(:disabled):focus-visible {
+    color: #521025;
+    background: #f8eaf0;
+    border-color: #521025;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #005fcc;
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    color: #595959;
+    background: #f0f0f0;
+    border-color: #8c8c8c;
+    opacity: 1;
+  }
+}

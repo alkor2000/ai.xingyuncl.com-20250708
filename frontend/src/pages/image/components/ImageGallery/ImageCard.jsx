@@ -158,7 +158,7 @@ const ImageCard = memo(({
     <Card
       className={`history-card ${isMj ? 'midjourney-card' : ''} ${isFailed ? 'failed-card' : ''}`}
       cover={
-        <div className="image-wrapper">
+        <div className={`image-wrapper ${isGallery && !isOwner ? 'has-gallery-report' : ''}`}>
           {item.moderation_status && item.moderation_status !== 'pass' && !isProcessing ? (
             <div className="processing-overlay"><WarningOutlined /><Tag>{t(`image.moderation.${item.moderation_status}`)}</Tag><p>{t('image.moderation.held')}</p></div>
           ) : isProcessing ? (

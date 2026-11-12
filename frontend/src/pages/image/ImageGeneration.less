@@ -556,7 +556,7 @@
         justify-content: center;
         padding: 8px;
         
-        .ant-btn {
+        .ant-btn:not(.gallery-report-button) {
           color: #fff;
           padding: 4px 8px;
           height: 28px;
@@ -575,8 +575,16 @@
         }
       }
       
-      &:hover .image-overlay {
+      &:hover .image-overlay,
+      &:focus-within .image-overlay {
         opacity: 1;
+      }
+
+      // Touch users cannot hover to discover the report action.
+      @media (hover: none) {
+        &.has-gallery-report .image-overlay {
+          opacity: 1;
+        }
       }
     }
 

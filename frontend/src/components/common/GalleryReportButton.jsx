@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button, Input, Modal, Select, Space, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import api from '../../utils/api';
+import './GalleryReportButton.less';
 const categories = ['sexual','violence','disgust','discrimination','political','minors','map','other'];
 export default function GalleryReportButton({ media, id, onHidden }) {
   const { t } = useTranslation();
@@ -16,8 +17,8 @@ export default function GalleryReportButton({ media, id, onHidden }) {
     } catch (e) { message.error(e.response?.data?.message || t('image.moderation.failed')); }
     finally { setBusy(false); }
   };
-  return <span onClick={e => e.stopPropagation()}>
-    <Button size="small" disabled={sent} onClick={() => { setCategory(undefined); setReason(''); setOpen(true); }}>{t(sent ? 'image.moderation.reportSent' : 'image.moderation.report')}</Button>
+  return <span className="gallery-report-control" onClick={e => e.stopPropagation()}>
+    <Button className="gallery-report-button" size="small" disabled={sent} onClick={() => { setCategory(undefined); setReason(''); setOpen(true); }}>{t(sent ? 'image.moderation.reportSent' : 'image.moderation.report')}</Button>
     <Modal title={t('image.moderation.report')} open={open} onCancel={() => { if (!busy) setOpen(false); }} onOk={submit} confirmLoading={busy} okButtonProps={{ disabled: !category }} okText={t('common.confirm')} cancelText={t('common.cancel')}>
       <Space direction="vertical" style={{ width: '100%' }}>
         <Select aria-label={t('image.galleryReview.selectReason')} value={category} onChange={setCategory} placeholder={t('image.galleryReview.selectReason')} style={{ width: '100%' }} options={categories.map(value => ({ value, label: t(`image.galleryReview.reportCategory.${value}`) }))} />
