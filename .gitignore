@@ -47,6 +47,10 @@ storage/uploads/
 uploads/
 storage/private/
 
+# Content-addressed runtime review media; retained across application releases.
+/storage/image-safety/
+/storage/video-safety/
+
 # 数据库备份
 *.sql
 !database/migrations/*.sql
