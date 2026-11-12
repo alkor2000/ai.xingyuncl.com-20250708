@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "site": "practice",
+  "repo": "/var/www/ai-platform",
+  "original_target": "f0b94dcb4ba099418eee8442f53ca1dd759ca043",
+  "parent": "ed1f67c9af07a2e2eacaed784e8acdce1c5a0608",
+  "original_receipts": {
+    "PREPARED.json": "0be67a2544f0fd7de1e3cc9e1e6dbc2cac836427c91e9e3bfa1dd7d2bd861e63",
+    "RUNNING.json": "0637c811adf42841ad94d0ceaec700f7b7d0e607b2dacca197096d9b669e1c42",
+    "NATIVE-RUNNING.json": "928fda47b4ff7a3997762dab7771aae10169bbb3ca48c4289cd0c68d49fe9b0a",
+    "INTENT.json": "0be67a2544f0fd7de1e3cc9e1e6dbc2cac836427c91e9e3bfa1dd7d2bd861e63",
+    "TERMINAL.json": "4c92a68885fda6b56d3b5714359b44ddaf7152f6d01c89bcb788ad41881df6ff",
+    "FAILED.json": "0bf8312e7aa6fe33b9c6a01801c7bca7b2bd1f4cef0794c58ddc15e7dfc28f47"
+  },
+  "original_backup": {
+    "path": "/var/backups/ai-platform/mysql/ai_platform-20261112_070436.sql.gz",
+    "size": 20976369,
+    "sha256": "8a3458c0ca2ed119a4c0e9ee740bee90d76c49538d06ee395e3f2827580049b0",
+    "gzip_test_exit": 0,
+    "sidecar_present": true,
+    "sidecar_digest": "8a3458c0ca2ed119a4c0e9ee740bee90d76c49538d06ee395e3f2827580049b0"
+  },
+  "mysql_version": "8.0.46-0ubuntu0.24.04.4",
+  "database": "ai_platform",
+  "trust": 0,
+  "log_bin": 1,
+  "knex_ledger": [
+    {
+      "id": 1,
+      "name": "20260127032549_000_baseline.js",
+      "batch": 1
+    },
+    {
+      "id": 2,
+      "name": "20260314_001_optimize_indexes.js",
+      "batch": 2
+    },
+    {
+      "id": 4,
+      "name": "20260316_001_create_agent_api_keys.js",
+      "batch": 3
+    },
+    {
+      "id": 5,
+      "name": "20260316_002_create_wiki_chunks.js",
+      "batch": 4
+    },
+    {
+      "id": 6,
+      "name": "20260316_003_create_forum_tables.js",
+      "batch": 5
+    },
+    {
+      "id": 7,
+      "name": "20260913_001_create_ai_lab_tables.js",
+      "batch": 6
+    },
+    {
+      "id": 8,
+      "name": "20260914_001_ai_lab_tabular_presets.js",
+      "batch": 6
+    },
+    {
+      "id": 9,
+      "name": "20260901_001_add_mindmap_content_type.js",
+      "batch": 7
+    },
+    {
+      "id": 10,
+      "name": "20260915_001_ai_lab_audio_text.js",
+      "batch": 8
+    },
+    {
+      "id": 11,
+      "name": "20260916_001_create_doc_templates.js",
+      "batch": 9
+    },
+    {
+      "id": 12,
+      "name": "20260921_001_p03_handoff_ledger.js",
+      "batch": 10
+    },
+    {
+      "id": 13,
+      "name": "20261104_001_sso_display_name.js",
+      "batch": 11
+    },
+    {
+      "id": 14,
+      "name": "20261105_001_image_safety.js",
+      "batch": 12
+    },
+    {
+      "id": 15,
+      "name": "20261106_001_gallery_teacher_review.js",
+      "batch": 12
+    },
+    {
+      "id": 16,
+      "name": "20261106_002_video_teacher_review.js",
+      "batch": 12
+    },
+    {
+      "id": 17,
+      "name": "20261110_001_gallery_reports_visibility.js",
+      "batch": 13
+    },
+    {
+      "id": 18,
+      "name": "20261110_002_gallery_machine_review.js",
+      "batch": 14
+    }
+  ],
+  "sql_ledger": [
+    "017_update_system_prompts_content_size",
+    "018_create_knowledge_modules",
+    "019_add_system_prompts",
+    "020_fix_system_prompts_structure_v2",
+    "021_add_knowledge_module_group_ids",
+    "022_cleanup_redundant_tables",
+    "023_add_message_status",
+    "024_add_message_sequence",
+    "025_complete_image_generation_system",
+    "026_fix_image_cascade_delete",
+    "027_add_document_upload_to_ai_models",
+    "029_add_user_uuid_for_sso",
+    "035_add_token_count_to_modules",
+    "067",
+    "069"
+  ],
+  "ddl": {
+    "image_safety": "CREATE TABLE `image_safety` (\n  `generation_id` bigint unsigned NOT NULL,\n  `state` varchar(16) NOT NULL DEFAULT 'pending',\n  `sha256` varchar(64) DEFAULT NULL,\n  `file_key` varchar(128) DEFAULT NULL,\n  `reason` varchar(80) NOT NULL DEFAULT 'awaiting_review',\n  `revision` int unsigned NOT NULL DEFAULT '0',\n  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,\n  `gallery_state` varchar(16) NOT NULL DEFAULT 'private',\n  `gallery_reviewer_id` bigint unsigned DEFAULT NULL,\n  `gallery_reviewed_at` timestamp NULL DEFAULT NULL,\n  `gallery_requested_at` timestamp NULL DEFAULT NULL,\n  `gallery_reason` varchar(500) DEFAULT NULL,\n  PRIMARY KEY (`generation_id`),\n  KEY `image_safety_sha256_index` (`sha256`),\n  KEY `image_safety_state_generation_id_index` (`state`,`generation_id`),\n  KEY `image_safety_gallery_state_generation_id_index` (`gallery_state`,`generation_id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+    "video_safety": "CREATE TABLE `video_safety` (\n  `generation_id` bigint unsigned NOT NULL,\n  `state` varchar(16) NOT NULL DEFAULT 'pending',\n  `gallery_state` varchar(16) NOT NULL DEFAULT 'private',\n  `sha256` varchar(64) DEFAULT NULL,\n  `file_key` varchar(128) DEFAULT NULL,\n  `file_size` bigint unsigned DEFAULT NULL,\n  `revision` int unsigned NOT NULL DEFAULT '0',\n  `reviewer_id` bigint unsigned DEFAULT NULL,\n  `requested_at` timestamp NULL DEFAULT NULL,\n  `reviewed_at` timestamp NULL DEFAULT NULL,\n  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,\n  `gallery_reason` varchar(500) DEFAULT NULL,\n  PRIMARY KEY (`generation_id`),\n  KEY `video_safety_sha256_index` (`sha256`),\n  KEY `video_safety_gallery_state_generation_id_index` (`gallery_state`,`generation_id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+    "image_safety_reports": "CREATE TABLE `image_safety_reports` (\n  `id` bigint unsigned NOT NULL AUTO_INCREMENT,\n  `generation_id` bigint unsigned NOT NULL,\n  `user_id` bigint unsigned NOT NULL,\n  `reason` varchar(500) NOT NULL,\n  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,\n  `category` varchar(32) NOT NULL DEFAULT 'other',\n  `resolved_at` timestamp NULL DEFAULT NULL,\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `image_safety_reports_generation_id_user_id_unique` (`generation_id`,`user_id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+    "video_safety_reports": "CREATE TABLE `video_safety_reports` (\n  `id` bigint unsigned NOT NULL AUTO_INCREMENT,\n  `generation_id` bigint unsigned NOT NULL,\n  `user_id` bigint unsigned NOT NULL,\n  `category` varchar(32) NOT NULL,\n  `reason` varchar(500) NOT NULL,\n  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,\n  `resolved_at` timestamp NULL DEFAULT NULL,\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `video_safety_reports_generation_id_user_id_unique` (`generation_id`,`user_id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+    "gallery_machine_reviews": "CREATE TABLE `gallery_machine_reviews` (\n  `media` varchar(8) NOT NULL,\n  `generation_id` bigint unsigned NOT NULL,\n  `content_hash` varchar(64) NOT NULL,\n  `policy_version` varchar(32) NOT NULL,\n  `decision` varchar(16) NOT NULL,\n  `map_detected` tinyint(1) NOT NULL DEFAULT '0',\n  `result` json NOT NULL,\n  `map_review` json DEFAULT NULL,\n  `checked_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (`media`,`generation_id`),\n  KEY `gallery_machine_reviews_media_decision_generation_id_index` (`media`,`decision`,`generation_id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+    "gallery_publication_control": "CREATE TABLE `gallery_publication_control` (\n  `id` int NOT NULL,\n  `frozen` tinyint(1) NOT NULL DEFAULT '0',\n  `reason` varchar(500) NOT NULL,\n  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+    "gallery_publication_control_events": "CREATE TABLE `gallery_publication_control_events` (\n  `id` bigint unsigned NOT NULL AUTO_INCREMENT,\n  `frozen` tinyint(1) NOT NULL,\n  `approval_reference` varchar(200) NOT NULL,\n  `reason` varchar(500) NOT NULL,\n  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+    "gallery_scan_actions": "CREATE TABLE `gallery_scan_actions` (\n  `media` varchar(8) NOT NULL,\n  `generation_id` bigint unsigned NOT NULL,\n  `snapshot_hash` varchar(64) NOT NULL,\n  `evidence` json NOT NULL,\n  `preimage` json NOT NULL,\n  `approval_reference` varchar(200) NOT NULL,\n  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (`media`,`generation_id`,`snapshot_hash`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+  },
+  "prior_trigger_names": [
+    "trg_teaching_lessons_after_delete",
+    "trg_teaching_lessons_after_insert",
+    "trg_teaching_lessons_after_update"
+  ],
+  "pm2": {
+    "ai-platform-auth": 477474,
+    "ai-platform-frontend": 477475
+  }
+}

@@ -18,12 +18,12 @@ VERIFY_SHA=$(sha256sum "$ROOT/dev/gallery-migrate.cjs" | cut -d' ' -f1)
 PLAN_SHA=$(sha256sum "$ROOT/dev/gallery-migration-plan.json" | cut -d' ' -f1)
 HELPER_SHA=$(sha256sum "$ROOT/dev/migration-stage.cjs" | cut -d' ' -f1)
 SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 "$HOST")
-LOCK_HELD=0; REMOTE_TERMINAL=0
+LOCK_HELD=0; REMOTE_TERMINAL=0; CHECKS_SUCCEEDED=0
 release_lock() {
   rc=$?
   trap - EXIT
-  if [ "$LOCK_HELD" = 1 ] && [ "$REMOTE_TERMINAL" != 1 ]; then
-    echo "UNKNOWN: remote terminal unconfirmed; retain original lock $TOKEN; no retry or deployment" >&2
+  if [ "$LOCK_HELD" = 1 ] && { [ "$REMOTE_TERMINAL" != 1 ] || [ "$CHECKS_SUCCEEDED" != 1 ] || [ "$rc" != 0 ]; }; then
+    echo "STOP: terminal receipt alone is not success; retain original lock $TOKEN; no retry or deployment" >&2
     [ "$rc" != 0 ] || rc=31
   elif [ "$LOCK_HELD" = 1 ]; then
     if ! "${SSH[@]}" bash "$APP/dev/docker-release-lock.sh" release "$LOCK" "$TOKEN"; then
@@ -119,3 +119,6 @@ REMOTE
   fi
   echo '所选清单迁移已核验完成；应用仍未切换，按独立发布确认继续。'
 fi
+
+# Only successful preparation or verified migration completion may release the lock.
+CHECKS_SUCCEEDED=1

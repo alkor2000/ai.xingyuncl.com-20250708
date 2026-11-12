@@ -144,3 +144,7 @@ status: ## 查看本地/生产 git 与服务状态
 	@echo "=== 生产 git ==="; ssh -n $(SSH_HOST) 'cd $(REMOTE_DIR) && git log --oneline -1 && git status -sb | head -1'
 	@echo "=== 生产服务 ==="; ssh -n $(SSH_HOST) '$(NVM); pm2 list | grep -E "ai-platform|name"; curl -sf http://127.0.0.1:4000/health >/dev/null && echo "health: ok" || echo "health: FAIL"'
 	@echo "=== 容器 ==="; docker ps --filter name=practice --format '{{.Names}} {{.Status}}'
+
+.PHONY: recover-gallery
+recover-gallery: ## 星云具名003恢复；须先复核并取得参数临时变更批准；不切应用
+	bash $(ROOT)/dev/recover-gallery.sh

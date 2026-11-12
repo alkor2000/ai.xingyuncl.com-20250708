@@ -168,7 +168,10 @@ async function run(action, repo, target, dir, expectedParent, profile) {
   if (action === 'verify-terminal') return terminal(repo, target, dir, expectedParent);
   if (action === 'native') return nativeMigration(repo, target, dir, expectedParent);
   if (action === 'verify' || action === 'verify-completed') {
-    if (action === 'verify-completed') await verifyGalleryDatabase(repo, record);
+    if (action === 'verify-completed') {
+      if (record.recovery) await require('./gallery-recovery.cjs').verifyRecoveredDatabase(repo, target, dir, record);
+      await verifyGalleryDatabase(repo, record);
+    }
     return record;
   }
   if (action === 'begin') {

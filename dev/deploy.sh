@@ -127,6 +127,23 @@ if [ "$PREPARED_MIGRATIONS" = 1 ]; then
   PREPARED_LOCK_HELD=1
 fi
 
+# A recovered stage additionally binds the incident and recovery verifier to this candidate.
+if [ "$PREPARED_MIGRATIONS" = 1 ] && [ -f "$ROOT/dev/gallery-recovery.cjs" ]; then
+  RECOVERY_SHA=$(sha256sum "$ROOT/dev/gallery-recovery.cjs" | cut -d' ' -f1)
+  INCIDENT_SHA=$(sha256sum "$ROOT/dev/gallery-recovery-incident.json" | cut -d' ' -f1)
+  ssh -o BatchMode=yes "$SSH_HOST" bash -s -- "$STAGE" "$RECOVERY_SHA" "$INCIDENT_SHA" <<'REMOTE'
+set -euo pipefail
+export NVM_DIR="$HOME/.nvm"; [ ! -s "$NVM_DIR/nvm.sh" ] || . "$NVM_DIR/nvm.sh"
+MODE=$(node -e 'const fs=require("fs"),r=JSON.parse(fs.readFileSync(process.argv[1]));console.log(r.recovery?"recovery":"ordinary")' "$1/PREPARED.json")
+if [ "$MODE" = recovery ]; then
+  [ "$(sha256sum "$1/gallery-recovery.cjs" | cut -d' ' -f1)" = "$2" ]
+  [ "$(sha256sum "$1/gallery-recovery-incident.json" | cut -d' ' -f1)" = "$3" ]
+else
+  [ "$MODE" = ordinary ]
+fi
+REMOTE
+fi
+
 # 3. 备份门：发布前先做一份数据库备份（约 112MB 库，几秒钟）
 echo "==> 发布前数据库备份 ..."
 BACKUP_ENV="APP_DIR=$REMOTE_DIR"
