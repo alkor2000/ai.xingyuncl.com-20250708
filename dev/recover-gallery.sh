@@ -16,7 +16,7 @@ if(!changed.length||changed.some(x=>!allowed.includes(x)))throw Error('Recovery 
 JS
 STAGE="/var/backups/ai-platform/releases/migration-$TARGET"
 LOCK=/var/backups/ai-platform/releases/.lock
-TOKEN="gallery-recovery-${TARGET:0:12}-$$-$(date +%s)"
+TOKEN=$(node -e 'console.log(require(process.argv[1]).transport_failure.lock_token)' "$ROOT/dev/gallery-recovery-incident.json")
 SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 "$HOST")
 HELD=0; VERIFIED=0
 finish(){
@@ -36,7 +36,15 @@ printf 'Practice recovery: %s; original failed stage: %s\n' "$TARGET" "$OLD"
 echo 'Only original 003; temporary GLOBAL 1 then restore 0; old receipts preserved; no PKU operations.'
 read -rp 'Owner approved this candidate, parameter change, and window? [y/N] ' answer
 [[ "$answer" = y || "$answer" = Y ]] || exit 1
-"${SSH[@]}" bash "$APP/dev/docker-release-lock.sh" acquire "$LOCK" "$TOKEN";HELD=1
+# Continue only this operator's preserved pre-execution failure, without releasing
+# or replacing its native lock. stdin carries code/data; SSH argv stays scalar.
+node - "$ROOT" <<'JS' | "${SSH[@]}" 'export NVM_DIR="$HOME/.nvm"; [ ! -s "$NVM_DIR/nvm.sh" ] || . "$NVM_DIR/nvm.sh"; node -'
+const root=process.argv[2],fn=require(root+'/dev/gallery-transport.cjs').verifyTransport;
+const spec=require(root+'/dev/gallery-recovery-incident.json').transport_failure;
+console.log('const verifyTransport='+fn.toString()+';');
+console.log('verifyTransport("/var/backups/ai-platform/releases",'+JSON.stringify(spec)+',true);');
+JS
+HELD=1
 BUNDLE=$(mktemp /tmp/gallery-recovery.XXXXXX.bundle)
 git -C "$ROOT" bundle create "$BUNDLE" "$OLD..HEAD"
 BUNDLE_SHA=$(sha256sum "$BUNDLE" | cut -d' ' -f1)
@@ -47,21 +55,25 @@ mkdir "$1"
 chmod 700 "$1"
 REMOTE
 scp -q -o BatchMode=yes "$BUNDLE" "$HOST:$STAGE/source.bundle"
-for name in migration-stage.cjs gallery-migrate.cjs gallery-migration-plan.json gallery-recovery.cjs gallery-recovery-incident.json; do
+for name in migration-stage.cjs gallery-migrate.cjs gallery-migration-plan.json gallery-recovery.cjs gallery-recovery-incident.json gallery-transport.cjs; do
  scp -q -o BatchMode=yes "$ROOT/dev/$name" "$HOST:$STAGE/$name"
 done
 # Pin helper bytes to the local reviewed commit before any helper can execute.
-HASHES=$(node - "$ROOT" <<'JS'
+HASHES_B64=$(node - "$ROOT" <<'JS'
 const fs=require('node:fs'),crypto=require('node:crypto'),r=process.argv[2];
-for(const n of require(r+'/dev/gallery-recovery.cjs').stagedTools)console.log(crypto.createHash('sha256').update(fs.readFileSync(r+'/dev/'+n)).digest('hex')+'  '+n);
+const lines=require(r+'/dev/gallery-recovery.cjs').stagedTools.map(n=>crypto.createHash('sha256').update(fs.readFileSync(r+'/dev/'+n)).digest('hex')+'  '+n);
+console.log(Buffer.from(lines.join('\n')+'\n').toString('base64'));
 JS
 )
-"${SSH[@]}" bash -s -- "$APP" "$STAGE" "$TARGET" "$TOKEN" "$APPROVAL_REFERENCE" "$BUNDLE_SHA" "$HASHES" <<'REMOTE'
+"${SSH[@]}" bash -s -- "$APP" "$STAGE" "$TARGET" "$TOKEN" "$APPROVAL_REFERENCE" "$BUNDLE_SHA" "$HASHES_B64" <<'REMOTE'
 set -euo pipefail
 APP=$1;STAGE=$2;TARGET=$3;TOKEN=$4;APPROVAL=$5
 export NVM_DIR="$HOME/.nvm";[ ! -s "$NVM_DIR/nvm.sh" ] || . "$NVM_DIR/nvm.sh"
 [ "$(sha256sum "$STAGE/source.bundle" | cut -d' ' -f1)" = "$6" ]
-(cd "$STAGE";printf '%s\n' "$7" | sha256sum --check --strict -)
+# Base64 is one shell-safe scalar; decode once, never eval it. Strict checksum
+# verification must complete before fetching objects or invoking recovery code.
+[[ "$7" =~ ^[A-Za-z0-9+/]+={0,2}$ ]]
+(cd "$STAGE";printf '%s' "$7" | base64 --decode | sha256sum --check --strict -)
 git -C "$APP" fetch "$STAGE/source.bundle" HEAD
 [ "$(git -C "$APP" rev-parse FETCH_HEAD)" = "$TARGET" ]
 # Node records restoration intent before SET; normal errors/signals attempt restoration.

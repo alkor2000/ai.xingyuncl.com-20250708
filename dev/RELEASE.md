@@ -239,7 +239,7 @@ make deploy-docker ARGS="--prebuilt=<核验过的包目录> --keep-history --gal
 
 **准备与执行（代理在WSL执行；不让产品负责人在PowerShell直接执行）：**
 
-1. 在干净的具名候选目录执行 `APPROVAL_REFERENCE=<本次批准编号> make recover-gallery`。固定连接practice，使用与迁移/应用部署相同的原生锁。不删除旧FAILED/RUNNING/TERMINAL，不重跑001/002，不在旧阶段造完成标记。
+1. 在干净的具名候选目录执行 `APPROVAL_REFERENCE=<本次批准编号> make recover-gallery`。固定连接practice，沿用13:26本次操作者保留的同一把原生锁，不先解锁或换token；核验具名传输失败目录六文件及完整owner摘要，不一致即停。不删除旧FAILED/RUNNING/TERMINAL，不重跑001/002，不在旧阶段造完成标记。
 2. 在新的 `migration-<恢复候选SHA>` 私有阶段传输已提交Git bundle及摘要绑定工具。核原失败六份回执摘要、旧helper原字节、当前父版及精确暂存三文件、PM2原进程、MySQL精确版本/实例UUID、两套账本、八表结构、三旧触发器、控制行和公开0范围。已有守卫、表内意外数据或迁移锁占用即停止。
 3. 用已有root本地socket MySQL管理员只读连接核实例与原参数0；无法使用现有身份即停止，不创建账号或授业务账号SUPER。核旧备份SHA/gzip，再经原备份脚本新增备份（保留全部旧备份），备份后重新核现场。原生锁只约束遵守它的发布者，批准窗口还须确认没有其他管理员并发DDL。
 4. 写持久`PARAMETER-INTENT.json`后临时`SET GLOBAL log_bin_trust_function_creators=1`，回读同实例；只运行原字节003的 `knex migrate:up`。无论迁移成功、失败或SET响应未知，均尝试`SET GLOBAL ...=0`，以新的管理员连接和业务连接分别回读0。全实例暂时放宽建函数/触发器限制；不SET PERSIST、不改MySQL配置文件、不重启MySQL、不关闭binlog。
@@ -253,3 +253,14 @@ make deploy-docker ARGS="--prebuilt=<核验过的包目录> --keep-history --gal
 - 参数已恢复但仅部分守卫创建：保留这些DDL与失败记录，仍不发布；须重新评估精确残留和新的恢复方案，不把本事故输入改成自动跳过。
 - 应用尚未切换时不需要应用回退或回库；已切换后的验后失败，仍按第六节 **先提交冻结、核八守卫/控制/审计回读成功，再回旧应用**。恢复阶段的PREPARED绑定原父版，原生安全回退入口可使用它。保留结构、审计和守卫，不down、不恢复未经人工审查的公开状态、不自动解冻。
 - 仅备份gzip/SHA验证不等于完成真实还原演练；隔离恢复测试、原生回退测试与现场业务验收分别记录。缺测试账号时不能把health200冒称教师批量/跨班隔离验收。
+
+
+### 11-12 13:26 SSH传参失败的具名续接（目标23:00，修正版需独立复核）
+
+根因是**传参编码**：OpenSSH将远端argv拼接成命令字符串，旧工具把带空格/换行的SHA清单直接作为参数，远端shell拆参并把后续摘要行当命令。不是源文件SHA计算错误，不是放宽校验规则可以解决的问题。新工具把整个清单编码为单行base64；远端验证字母表、解码后保持`sha256sum --check --strict`，pipefail覆盖解码错误。校验未全过，不fetch、不启动恢复入口、不改GLOBAL。
+
+本次精确新现场额外绑定在事故输入的`transport_failure`：d249c241失败阶段**只有bundle和五个helper**，完整六文件摘要和原锁owner摘要必须保持；新增了参数意图、完成回执、多出文件、换锁、文件变更或符号链接都停止。原恢复命令已由原操作者确认结束后，获准的新候选在同一owner/token下继续，另建`migration-<新SHA>`，旧阶段和锁均不改写。恢复过程中反复核旧传输证据/完整owner，成功后的部署消费门也核保留证据。新helper在运行前及部署消费前都与候选SHA绑定。不是通用抢锁、强制重试或FAILED跳过功能。
+
+一次失败停止，不重跑、不删新目录。若又出现半执行，保留所有阶段、原锁和参数回读证据，重新列精确现场。只有新阶段003成功、参数复原与新连接核验、账本/守卫及消费门全部通过，才经原生锁工具释放**同一个原操作者token**；这不是发布前手动解锁。其他管理员有并发DDL、原进程是否结束不明或锁归属变动，都不得接续。北大和四个停用测试账号不受本次工具开发操作影响。
+
+本机隔离验证入口（WSL Bash，仅合成数据库）：`node --test dev/tests/gallery-recovery.test.cjs dev/tests/gallery-transport.test.cjs dev/tests/migration-stage.test.cjs`；完整链为`node dev/tests/gallery-recovery-mysql.cjs <本机私有配置JSON> <结果JSON>`。私有配置限定127.0.0.1高位端口，含purpose=`gallery-recovery-isolated-test`、port、password及`sshPython`（独立虚拟环境，已装Paramiko）。工具自建临时SSH公钥、固定known_hosts，仅监听127.0.0.1；真实OpenSSH客户端把参数送到本机SSH服务，执行生产脚本的原远端块，再跑真实MySQL备份/原版003/复原/消费核验。PM2身份和管理员socket到本机测试库的路由是夹具，不能冒称生产端到端或应用业务验收。坏清单必须在参数意图之前失败；全链还检查旧账本、旧失败与传输证据保留、旧token不被替换。

@@ -101,13 +101,14 @@ for(const [verified,rc,released]of [[0,1,false],[0,0,false],[1,1,false],[1,0,tru
   const r=cp.spawnSync('bash',['-c',script],{encoding:'utf8'});assert.equal(fs.existsSync(path.join(dir,'release')),released);assert.equal(r.status,rc===0&&!verified?31:rc);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
-for(const mode of ['ordinary','recovery','missing-helper','changed-helper','bad-json'])test('deployment helper pin '+mode,()=>{
+for(const mode of ['ordinary','recovery','missing-helper','changed-helper','changed-transport','bad-json'])test('deployment helper pin '+mode,()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'recovery-deploy-pin-'));try{
   const source=fs.readFileSync(path.join(root,'dev/deploy.sh'),'utf8');
   const start=source.indexOf("<<'REMOTE'",source.indexOf('# A recovered stage'))+"<<'REMOTE'\n".length;
   const block=source.slice(start,source.indexOf('\nREMOTE',start));
   fs.writeFileSync(path.join(dir,'PREPARED.json'),mode==='bad-json'?'broken':JSON.stringify(mode==='ordinary'?{}:{recovery:{}}));
-  const sums=[];for(const name of ['gallery-recovery.cjs','gallery-recovery-incident.json']){const data=fs.readFileSync(path.join(root,'dev',name));sums.push(digest(data));if(mode!=='missing-helper')fs.writeFileSync(path.join(dir,name),data);}
+  const sums=[];for(const name of ['gallery-recovery.cjs','gallery-recovery-incident.json','gallery-transport.cjs']){const data=fs.readFileSync(path.join(root,'dev',name));sums.push(digest(data));if(mode!=='missing-helper')fs.writeFileSync(path.join(dir,name),data);}
+  if(mode==='changed-transport')fs.appendFileSync(path.join(dir,'gallery-transport.cjs'),'\nchanged');
   if(mode==='changed-helper')fs.appendFileSync(path.join(dir,'gallery-recovery.cjs'),'\nchanged');
   const result=cp.spawnSync('bash',['-s','--',dir,...sums],{input:block,encoding:'utf8',env:{...process.env,HOME:dir}});
   assert.equal(result.status===0,['ordinary','recovery'].includes(mode),result.stderr);

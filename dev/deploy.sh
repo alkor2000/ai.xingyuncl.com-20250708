@@ -130,13 +130,15 @@ fi
 # A recovered stage additionally binds the incident and recovery verifier to this candidate.
 if [ "$PREPARED_MIGRATIONS" = 1 ] && [ -f "$ROOT/dev/gallery-recovery.cjs" ]; then
   RECOVERY_SHA=$(sha256sum "$ROOT/dev/gallery-recovery.cjs" | cut -d' ' -f1)
+  TRANSPORT_SHA=$(sha256sum "$ROOT/dev/gallery-transport.cjs" | cut -d' ' -f1)
   INCIDENT_SHA=$(sha256sum "$ROOT/dev/gallery-recovery-incident.json" | cut -d' ' -f1)
-  ssh -o BatchMode=yes "$SSH_HOST" bash -s -- "$STAGE" "$RECOVERY_SHA" "$INCIDENT_SHA" <<'REMOTE'
+  ssh -o BatchMode=yes "$SSH_HOST" bash -s -- "$STAGE" "$RECOVERY_SHA" "$INCIDENT_SHA" "$TRANSPORT_SHA" <<'REMOTE'
 set -euo pipefail
 export NVM_DIR="$HOME/.nvm"; [ ! -s "$NVM_DIR/nvm.sh" ] || . "$NVM_DIR/nvm.sh"
 MODE=$(node -e 'const fs=require("fs"),r=JSON.parse(fs.readFileSync(process.argv[1]));console.log(r.recovery?"recovery":"ordinary")' "$1/PREPARED.json")
 if [ "$MODE" = recovery ]; then
   [ "$(sha256sum "$1/gallery-recovery.cjs" | cut -d' ' -f1)" = "$2" ]
+  [ "$(sha256sum "$1/gallery-transport.cjs" | cut -d' ' -f1)" = "$4" ]
   [ "$(sha256sum "$1/gallery-recovery-incident.json" | cut -d' ' -f1)" = "$3" ]
 else
   [ "$MODE" = ordinary ]

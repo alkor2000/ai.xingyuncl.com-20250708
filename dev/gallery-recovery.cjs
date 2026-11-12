@@ -8,8 +8,8 @@ const third=plan.profiles['gallery-review'][2];
 const ensure=(ok,why)=>{if(!ok)throw Error(why);};
 const normalizedDDL=s=>s.replace(/ AUTO_INCREMENT=\d+/g,'').trim();
 const git=(repo,...args)=>cp.execFileSync('git',['-C',repo,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']});
-const toolPaths=['Makefile','dev/RELEASE.md','dev/deploy.sh','dev/prepare-migrations.sh','dev/migration-stage.cjs','dev/gallery-recovery.cjs','dev/gallery-recovery-incident.json','dev/recover-gallery.sh','dev/tests/gallery-recovery.test.cjs','dev/tests/gallery-recovery-mysql.cjs'];
-const stagedTools=['migration-stage.cjs','gallery-migrate.cjs','gallery-migration-plan.json','gallery-recovery.cjs','gallery-recovery-incident.json'];
+const toolPaths=['Makefile','dev/RELEASE.md','dev/deploy.sh','dev/prepare-migrations.sh','dev/migration-stage.cjs','dev/gallery-recovery.cjs','dev/gallery-recovery-incident.json','dev/recover-gallery.sh','dev/tests/gallery-recovery.test.cjs','dev/tests/gallery-recovery-mysql.cjs','dev/gallery-transport.cjs','dev/tests/gallery-transport.test.cjs','dev/tests/gallery-ssh-server.py'];
+const stagedTools=['migration-stage.cjs','gallery-migrate.cjs','gallery-migration-plan.json','gallery-recovery.cjs','gallery-recovery-incident.json','gallery-transport.cjs'];
 function regular(file){const s=fs.lstatSync(file);ensure(s.isFile()&&!s.isSymbolicLink(),'not_regular_file');return fs.readFileSync(file);}
 function privateDir(dir){const s=fs.lstatSync(dir);ensure(s.isDirectory()&&!s.isSymbolicLink()&&fs.realpathSync(dir)===dir&&(s.mode&0o777)===0o700&&s.uid===process.getuid(),'not_private_owned_directory');}
 function original(repo,target,dir,spec=incident){
@@ -27,6 +27,10 @@ function original(repo,target,dir,spec=incident){
  ensure(old.parent===spec.parent&&old.repo===repo&&old.target===spec.original_target&&old.profile==='gallery-review','old_prepared_identity_changed');
  stage.verifyFiles(repo,old);
  const record={...old,target,recovery:{original_target:spec.original_target,incident_sha256:digest(regular(path.join(dir,'gallery-recovery-incident.json')))}};
+ if(spec.transport_failure){
+  const transport=require('./gallery-transport.cjs').verifyTransport(path.dirname(dir),spec.transport_failure,false);
+  record.recovery.transport_failure=transport;
+ }
  stage.verifyFiles(repo,record);return record;
 }
 function lockOwned(dir,token){
@@ -144,13 +148,16 @@ function backupCheck(file,sha){
 }
 async function run(repo,target,dir,token,approval){
  ensure(/^[A-Za-z0-9_.:-]{1,200}$/.test(approval||''),'missing_approval_reference');
- lockOwned(dir,token);const record=original(repo,target,dir);runtimeIdentity();
+ lockOwned(dir,token);
+ ensure(incident.transport_failure?.lock_token===token,'transport_continuation_token_required');
+ require('./gallery-transport.cjs').verifyTransport(path.dirname(dir),incident.transport_failure,true);
+ const record=original(repo,target,dir);runtimeIdentity();
  ensure(!fs.existsSync(path.join(dir,'RUNNING.json'))&&!fs.existsSync(path.join(dir,'FAILED.json')),'recovery_already_attempted');
  backupCheck(incident.original_backup.path,incident.original_backup.sha256);
  save(dir,'INTENT.json',{...record,approval,original_backup:incident.original_backup});
  save(dir,'PREPARED.json',record);save(dir,'RUNNING.json',{...record,attempt_token:token,approval});
  for(const signal of ['SIGINT','SIGTERM','SIGHUP'])process.on(signal,()=>{interrupted=true;if(activeChild)activeChild.kill('SIGTERM');});
- const files=async()=>{ensure(!interrupted,'interrupted');lockOwned(dir,token);ensure(digest(original(repo,target,dir))===digest(record),'recovery_binding_changed');runtimeIdentity();};
+ const files=async()=>{ensure(!interrupted,'interrupted');lockOwned(dir,token);require('./gallery-transport.cjs').verifyTransport(path.dirname(dir),incident.transport_failure,true);ensure(digest(original(repo,target,dir))===digest(record),'recovery_binding_changed');runtimeIdentity();};
  const inspect=async completed=>{await files();const k=connect(repo);try{return await databaseSnapshot(k,incident,completed);}finally{await k.destroy();}};
  try{
   await recover({

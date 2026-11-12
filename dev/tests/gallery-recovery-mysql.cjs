@@ -61,9 +61,9 @@ async function scenario(name,fault){
 
 async function nativeScenario(){
  const x=await fixture(),base=fs.mkdtempSync(path.join(os.tmpdir(),'gallery-native-recovery-')),repo=path.join(base,'repo'),bin=path.join(base,'bin');
- fs.mkdirSync(repo);fs.mkdirSync(bin);const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
+ let sshServer;fs.mkdirSync(repo);fs.mkdirSync(bin);const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
  const git=(...args)=>cp.execFileSync('git',['-C',repo,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
- const backupDir='/mnt/d/TeachingWorkspace/batch-output/gallery-recovery-tool-20261112/'+path.basename(base);fs.mkdirSync(backupDir,{recursive:true});
+ const backupDir='/mnt/d/TeachingWorkspace/batch-output/gallery-recovery-transport-20261112/'+path.basename(base);fs.mkdirSync(backupDir,{recursive:true});
  const env={...process.env,PATH:bin+':'+process.env.PATH,NODE_ENV:'development',APP_DIR:repo,BACKUP_DIR:backupDir,BACKUP_RETENTION:'skip'};
  for(const key of ['DB','DB_HOST','DB_PORT','DB_USER','DB_NAME','DB_PASSWORD'])delete env[key];
  try{
@@ -84,30 +84,65 @@ async function nativeScenario(){
   fs.writeFileSync(repo+'/backend/.env',`DB_HOST=127.0.0.1\nDB_PORT=${cfg.port}\nDB_USER=${x.config.connection.user}\nDB_PASSWORD=${x.config.connection.password}\nDB_NAME=${x.spec.database}\n`,{mode:0o600});
   const previousBackup=cp.execFileSync('bash',[repo+'/backend/scripts/db_backup.sh'],{env,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
   await new Promise(r=>setTimeout(r,1100));
-  const spec={...x.spec,repo,parent,original_target:oldTarget,original_receipts:Object.fromEntries(Object.keys(incident.original_receipts).map(n=>[n,sha(fs.readFileSync(oldDir+'/'+n))])),original_backup:{path:previousBackup,sha256:sha(fs.readFileSync(previousBackup))}};
+  const transportTarget='d'.repeat(40),transportDir=base+'/migration-'+transportTarget,owner='token=local-native-recovery\nsince=isolated\nhost=local\n';
+  fs.mkdirSync(transportDir,{mode:0o700});fs.writeFileSync(transportDir+'/source.bundle','fixed transport failure');
+  for(const n of ['migration-stage.cjs','gallery-migrate.cjs','gallery-migration-plan.json','gallery-recovery.cjs','gallery-recovery-incident.json'])fs.writeFileSync(transportDir+'/'+n,cp.execFileSync('git',['-C',root,'show','d249c241ab6195eec31b1b076e0edcdccfac3c2d:dev/'+n]));
+  fs.mkdirSync(base+'/.lock');fs.writeFileSync(base+'/.lock/owner',owner);
+  const transport_failure={target:transportTarget,lock_token:'local-native-recovery',lock_owner_sha256:sha(owner),files:Object.fromEntries(fs.readdirSync(transportDir).map(n=>[n,sha(fs.readFileSync(transportDir+'/'+n))]))};
+  const spec={...x.spec,transport_failure,repo,parent,original_target:oldTarget,original_receipts:Object.fromEntries(Object.keys(incident.original_receipts).map(n=>[n,sha(fs.readFileSync(oldDir+'/'+n))])),original_backup:{path:previousBackup,sha256:sha(fs.readFileSync(previousBackup))}};
   git('reset','--hard',oldTarget);
   for(const n of recovery.stagedTools)fs.copyFileSync(root+'/dev/'+n,repo+'/dev/'+n);
   fs.writeFileSync(repo+'/dev/gallery-recovery-incident.json',JSON.stringify(spec,null,2)+'\n');git('add','.');git('commit','-qm','recovery tools');const target=git('rev-parse','HEAD');
   const dir=base+'/migration-'+target;fs.mkdirSync(dir,{mode:0o700});for(const n of recovery.stagedTools)fs.copyFileSync(repo+'/dev/'+n,dir+'/'+n);
+  git('bundle','create',dir+'/source.bundle',oldTarget+'..HEAD');
   git('reset','--hard',parent);git('checkout',target,'--',...Object.keys(old.sources));
-  fs.mkdirSync(base+'/.lock');fs.writeFileSync(base+'/.lock/owner','token=local-native-recovery\n');
+
   // Only the administrator transport and PM2 identity are fixtures. The recovery
   // CLI, real dump, real knex child, durable stages and deployment consumer are real.
   fs.writeFileSync(bin+'/mysql',`#!/usr/bin/env python3\nimport os,sys\na=[x for x in sys.argv[1:] if not x.startswith('--protocol=')]\nos.environ['MYSQL_PWD']=${JSON.stringify(cfg.password)}\nos.execv('/usr/bin/mysql',['mysql','--protocol=TCP','--host=127.0.0.1','--port=${cfg.port}']+a)\n`,{mode:0o700});
   fs.writeFileSync(bin+'/pm2',"#!/bin/sh\ncat <<'JSON'\n"+JSON.stringify(Object.entries(incident.pm2).map(([name,pid])=>({name,pid,pm2_env:{status:'online',restart_time:0}})))+"\nJSON\n",{mode:0o700});
-  let run=cp.spawnSync(process.execPath,[dir+'/gallery-recovery.cjs',repo,target,dir,'local-native-recovery','isolated-test-approval'],{env,encoding:'utf8',timeout:90000});
+  // Actual OpenSSH client -> authenticated loopback SSH server -> remote bash
+  // parses the command string exactly as production does, then real MySQL recovery.
+  assert(cfg.sshPython,'Isolated Python with Paramiko is required');
+  cp.execFileSync('ssh-keygen',['-q','-t','ed25519','-N','','-f',base+'/ssh-client']);
+  sshServer=cp.spawn(cfg.sshPython,[root+'/dev/tests/gallery-ssh-server.py',base],{env,stdio:['ignore','ignore','ignore']});
+  for(let i=0;!fs.existsSync(base+'/ssh-ready.json');i++){assert(i<100,'SSH server did not start');await new Promise(r=>setTimeout(r,100));}
+  const sshInfo=JSON.parse(fs.readFileSync(base+'/ssh-ready.json'));
+  const sshArgs=['-T','-F','/dev/null','-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+base+'/ssh-known-hosts','-i',base+'/ssh-client','-p',String(sshInfo.port),'gallery-isolated@127.0.0.1'];
+  const transportFn=require('../gallery-transport.cjs').verifyTransport;
+  const preflightCode='const verifyTransport='+transportFn.toString()+';verifyTransport('+JSON.stringify(base)+','+JSON.stringify(transport_failure)+',true);';
+  const preflight=cp.spawnSync('ssh',[...sshArgs,'node','-'],{env,input:preflightCode,encoding:'utf8',timeout:15000});assert.equal(preflight.status,0,preflight.stderr);
+  assert.equal(fs.readFileSync(base+'/.lock/owner','utf8'),owner);
+  const wrapper=fs.readFileSync(root+'/dev/recover-gallery.sh','utf8');
+  const start=wrapper.indexOf("<<'REMOTE'",wrapper.indexOf('HASHES_B64='))+"<<'REMOTE'\n".length;
+  const block=wrapper.slice(start,wrapper.indexOf('\nREMOTE',start));
+  const bundleHash=sha(fs.readFileSync(dir+'/source.bundle'));
+  const manifest=recovery.stagedTools.map(n=>sha(fs.readFileSync(dir+'/'+n))+'  '+n).join('\n')+'\n';
+  const encoded=Buffer.from(manifest).toString('base64');
+  const remote=encodedValue=>cp.spawnSync('ssh',[...sshArgs,'bash','-s','--',repo,dir,target,'local-native-recovery','isolated-test-approval',bundleHash,encodedValue],{env,input:block,encoding:'utf8',timeout:120000});
+  // Old multiline form really fails over SSH; the bad manifest never invokes Node/SET.
+  const oldTransport=remote(manifest);assert.notEqual(oldTransport.status,0);assert(!fs.existsSync(dir+'/PARAMETER-INTENT.json'));
+  const [[beforeTransport]]=await fresh('SELECT @@global.log_bin_trust_function_creators trust');assert.equal(beforeTransport.trust,0);
+  const bad=remote(encoded.slice(0,-5));assert.notEqual(bad.status,0);assert(!fs.existsSync(dir+'/PARAMETER-INTENT.json'));
+  fs.writeFileSync(path.join(path.dirname(output),'ssh-rejected-manifests.log'),oldTransport.stderr+'\n'+bad.stderr);
+  let run=remote(encoded);
+
   fs.writeFileSync(path.join(path.dirname(output),'native-cli.log'),run.stdout+run.stderr);assert.equal(run.status,0,run.stdout+run.stderr);
   const verify=()=>cp.spawnSync(process.execPath,[dir+'/migration-stage.cjs','verify-completed',repo,target,dir],{env,encoding:'utf8',timeout:30000});
   run=verify();assert.equal(run.status,0,run.stderr);
+  for(const [n,hash]of Object.entries(transport_failure.files))assert.equal(sha(fs.readFileSync(transportDir+'/'+n)),hash);
+  assert.equal(fs.readFileSync(base+'/.lock/owner','utf8'),owner);
+  fs.copyFileSync(base+'/ssh-commands.private.log',path.join(path.dirname(output),'ssh-commands.private.log'));
   const completed=JSON.parse(fs.readFileSync(dir+'/RECOVERY-COMPLETE.json'));assert.equal(completed.parameter_restored,0);assert(fs.existsSync(dir+'/COMPLETE'));
+  fs.writeFileSync(path.join(path.dirname(output),'native-receipts.json'),JSON.stringify(Object.fromEntries(['PARAMETER-INTENT.json','003-STARTED.json','003-DONE.json','PARAMETER-RESTORED.json','RECOVERY-COMPLETE.json','TERMINAL.json','BACKUP.json'].map(n=>[n,JSON.parse(fs.readFileSync(dir+'/'+n))])),null,2)+'\n');
   for(const [n,digest]of Object.entries(spec.original_receipts))assert.equal(sha(fs.readFileSync(oldDir+'/'+n)),digest);
   assert(!fs.existsSync(oldDir+'/MIGRATED.json'));assert(!fs.existsSync(oldDir+'/COMPLETE'));
   await fresh('SET GLOBAL log_bin_trust_function_creators=1');assert.notEqual(verify().status,0);await fresh('SET GLOBAL log_bin_trust_function_creators=0');assert.equal(verify().status,0);
   const restored=fs.readFileSync(dir+'/PARAMETER-RESTORED.json');fs.unlinkSync(dir+'/PARAMETER-RESTORED.json');assert.notEqual(verify().status,0);fs.writeFileSync(dir+'/PARAMETER-RESTORED.json',restored);
   run=cp.spawnSync(process.execPath,[dir+'/gallery-recovery.cjs',repo,target,dir,'local-native-recovery','isolated-test-approval'],{env,encoding:'utf8',timeout:30000});assert.notEqual(run.status,0);assert.equal((await x.k('knex_migrations').where('name',third)).length,1);
-  fs.writeFileSync(path.join(path.dirname(output),'native-stage-summary.json'),JSON.stringify({passed:true,original_receipts_unchanged:true,old_completion_absent:true,new_native_completion:true,native_deployment_consumer:true,global_drift_blocks_switch:true,missing_restore_blocks_switch:true,retry_denied:true,backup_real:true,limits:['synthetic MySQL data','administrator CLI redirected to dedicated local container','PM2 process identity simulated','SSH transport and actual rebuild not performed']},null,2)+'\n');
+  fs.writeFileSync(path.join(path.dirname(output),'native-stage-summary.json'),JSON.stringify({passed:true,original_receipts_unchanged:true,old_completion_absent:true,new_native_completion:true,native_deployment_consumer:true,global_drift_blocks_switch:true,missing_restore_blocks_switch:true,retry_denied:true,backup_real:true,openssh_client_real:true,remote_shell_real:true,manifest_gate_before_parameter:true,old_multiline_reproduced:true,preserved_transport_evidence:true,limits:['synthetic MySQL data','administrator CLI redirected to dedicated local container','PM2 process identity simulated','SSH server is loopback Paramiko with a fresh key; actual application rebuild not performed']},null,2)+'\n');
   facts.push({name:'full-native-cli-backup-knex-receipts-and-deployment-consumer',passed:true});
- }finally{await fresh('SET GLOBAL log_bin_trust_function_creators=0');await x.close();fs.rmSync(base,{recursive:true,force:true});}
+ }finally{if(sshServer)sshServer.kill('SIGTERM');await fresh('SET GLOBAL log_bin_trust_function_creators=0');await x.close();fs.rmSync(base,{recursive:true,force:true});}
 }
 
 (async()=>{

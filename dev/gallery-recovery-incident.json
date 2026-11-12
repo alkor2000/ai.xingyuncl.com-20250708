@@ -146,5 +146,19 @@
   "pm2": {
     "ai-platform-auth": 477474,
     "ai-platform-frontend": 477475
+  },
+  "transport_failure": {
+    "target": "d249c241ab6195eec31b1b076e0edcdccfac3c2d",
+    "lock_token": "gallery-recovery-d249c241ab61-3930544-1794461207",
+    "lock_owner_sha256": "2edcb11c368c1ee439553b2b1ae3342ee33ba79fb816f0410c3c4074d8520be4",
+    "files": {
+      "gallery-migrate.cjs": "cec6e77500291cbabd551eee2e522bfa9ebffcf52d7d820f0ecb20f211567b26",
+      "gallery-migration-plan.json": "3043c62cdc103f6cb0584e7278a60e669b48bde60b44b3348bbab3b43b01c1b6",
+      "gallery-recovery-incident.json": "b12ba78db03ff81d3513415f9937e2a018ad3f7997b8ab73b25d4c2e483148de",
+      "gallery-recovery.cjs": "cd8edd81dd1f423573150862e10930f9abccd4249d0a06752a7be00af2255259",
+      "migration-stage.cjs": "a70833e0b8482bba2cccbf185783f7865204ecd1deb26568989cb39b84e92621",
+      "source.bundle": "66e67da84960338866c31e76a698b2d6afa7d243107f6f6ed3267bfe235b8182"
+    },
+    "description": "2026-11-12 13:26 SSH argv split before recovery entry; retained stage and native lock; no parameter/DDL/application changes"
   }
 }
