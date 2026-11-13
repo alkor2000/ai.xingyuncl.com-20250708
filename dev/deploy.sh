@@ -193,8 +193,16 @@ if [ "$PREPARED_MIGRATIONS" = 1 ]; then
   [ "\$(sha256sum '$STAGE/gallery-migration-plan.json' | cut -d' ' -f1)" = "$STAGE_PLAN_SHA" ] || { echo 'STOP: staged plan bytes changed'; exit 1; }
   [ "\$(sha256sum '$STAGE/gallery-migrate.cjs' | cut -d' ' -f1)" = "$STAGE_VERIFY_SHA" ] || { echo 'STOP: staged database verifier bytes changed'; exit 1; }
   node "$STAGE/migration-stage.cjs" verify-completed "$REMOTE_DIR" "$TARGET_FULL" "$STAGE" || exit 1
-elif [ -n "\$(git status --porcelain)" ]; then
-  echo "❌ 服务器工作区不干净（有人直接改了生产文件），中止："; git status --short | head -20; exit 1
+elif ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "❌ 服务器已跟踪源码有未提交改动，中止："; git status --short | head -20; exit 1
+else
+  # The running parent may predate these .gitignore entries. Preserve only these
+  # two private runtime directories; tracked changes and all other unknown files
+  # still block the switch. Directory patterns do not exempt same-name symlinks.
+  UNTRACKED=\$(git ls-files --others --exclude-standard --exclude=/storage/image-safety/ --exclude=/storage/video-safety/) || exit 1
+  if [ -n "\$UNTRACKED" ]; then
+    echo "❌ 服务器有非运行媒体的未跟踪文件，中止："; git status --short | head -20; exit 1
+  fi
 fi
 git checkout -q $BRANCH
 git merge --ff-only \$TARGET
