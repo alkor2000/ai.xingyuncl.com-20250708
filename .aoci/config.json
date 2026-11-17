@@ -575,6 +575,20 @@
   "automation": {
     "mode": "auto"
   },
+  "database_sources": [
+    {
+      "source_id": "local-mysql",
+      "engine": "mysql",
+      "database": "ai_platform_aoci_xingyun_20261116",
+      "namespaces": [
+        "ai_platform_aoci_xingyun_20261116"
+      ],
+      "credential_env": "PRACTICE_AOCI_DB_DSN",
+      "connect_timeout_seconds": 10,
+      "query_timeout_seconds": 30,
+      "enabled": true
+    }
+  ],
   "ai": {
     "enabled": false,
     "provider": "openai-compatible",

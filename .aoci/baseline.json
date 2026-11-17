@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-09-13T05:40:35Z",
-  "updated_at": "2026-11-08T13:34:29Z",
+  "updated_at": "2026-11-17T00:47:18Z",
   "files": {
     ".dockerignore": {
       "sha256": "b92e95618b974897813418c0e4b8a6abe137470dff6d372a6b35df07fd9631d9",
@@ -49,9 +49,16 @@
       "normalized_sha256": "1721d6f96f63d6b5b60ddf30d3c2e56609925286021877d96b62abc6c641d48a"
     },
     "aoci.code.txt": {
-      "sha256": "af540ee226154d9e852edfd59ea9ff3af795e1332910821c544c76c03f713364",
-      "size": 398519,
-      "normalized_sha256": "af540ee226154d9e852edfd59ea9ff3af795e1332910821c544c76c03f713364"
+      "role": "index",
+      "sha256": "dea6006bef6cc4ef0ca6d35fc76aab396440dbe42d51ccf5f67e3d427aeef738",
+      "size": 412881,
+      "normalized_sha256": "dea6006bef6cc4ef0ca6d35fc76aab396440dbe42d51ccf5f67e3d427aeef738"
+    },
+    "aoci.database.txt": {
+      "role": "index",
+      "sha256": "6150018503405fd3c282b64e472387d0c6956fb4ea02e7e565b59f5e45ba2881",
+      "size": 51232,
+      "normalized_sha256": "6150018503405fd3c282b64e472387d0c6956fb4ea02e7e565b59f5e45ba2881"
     },
     "aoci.meta.txt": {
       "role": "index",
@@ -61,9 +68,9 @@
     },
     "aoci.txt": {
       "role": "index",
-      "sha256": "4f88dbb3fb7b2d83b659bbc5493dd796bbbbc6ccbaf518a9198f6dd7acdd68de",
-      "size": 300,
-      "normalized_sha256": "4f88dbb3fb7b2d83b659bbc5493dd796bbbbc6ccbaf518a9198f6dd7acdd68de"
+      "sha256": "9bc644fddb7146ec1fffc88bb7d1a8b4d44d79be04ce482fe8c22d1bb476ef6e",
+      "size": 406,
+      "normalized_sha256": "9bc644fddb7146ec1fffc88bb7d1a8b4d44d79be04ce482fe8c22d1bb476ef6e"
     },
     "backend/jest.combined.config.js": {
       "role": "index",
@@ -197,6 +204,24 @@
       "size": 2037,
       "normalized_sha256": "d546115acbbaee816e4d83f603707ce3d43a7d9719d7f043f28b7021a9b70933"
     },
+    "backend/migrations/20261110_001_gallery_reports_visibility.js": {
+      "role": "index",
+      "sha256": "634b3fb30cb5083f04e864623c7c460612032c354aca969883bf550c4162944c",
+      "size": 1469,
+      "normalized_sha256": "634b3fb30cb5083f04e864623c7c460612032c354aca969883bf550c4162944c"
+    },
+    "backend/migrations/20261110_002_gallery_machine_review.js": {
+      "role": "index",
+      "sha256": "50de65c8238b4ee865096a7456ba42cf5daadbaff8775948747520993e1c0785",
+      "size": 989,
+      "normalized_sha256": "50de65c8238b4ee865096a7456ba42cf5daadbaff8775948747520993e1c0785"
+    },
+    "backend/migrations/20261110_003_gallery_rollback_guard.js": {
+      "role": "index",
+      "sha256": "3f2398291e71e343504fcf6b2fed934f5cf17e76c101933308247334d36bd312",
+      "size": 2896,
+      "normalized_sha256": "3f2398291e71e343504fcf6b2fed934f5cf17e76c101933308247334d36bd312"
+    },
     "backend/package-lock.json": {
       "sha256": "6b5c6fbecc22f6bc591cc3aa1c07fd48a8b619822851290ea091c87b6c878b3c",
       "size": 348273,
@@ -227,10 +252,40 @@
       "size": 14075,
       "normalized_sha256": "d841bffddd2dc4d416bf4b3527dcb9e2e66fecff0f6c3dca72782d8c838f1266"
     },
+    "backend/scripts/gallery-publication-freeze.cjs": {
+      "role": "index",
+      "sha256": "045bb29fe62ae2e9b3ce4025c9c9770aa5b3c58c0c2b15603c3b5cd313e19fa1",
+      "size": 2456,
+      "normalized_sha256": "045bb29fe62ae2e9b3ce4025c9c9770aa5b3c58c0c2b15603c3b5cd313e19fa1"
+    },
+    "backend/scripts/gallery-review-apply.cjs": {
+      "role": "index",
+      "sha256": "968e7db7c712d531a46b28e7df8dfc3202a736070a909b643e60df195be365d8",
+      "size": 1339,
+      "normalized_sha256": "968e7db7c712d531a46b28e7df8dfc3202a736070a909b643e60df195be365d8"
+    },
     "backend/scripts/gallery-review-backfill.js": {
       "sha256": "6d0bde4867b5b3ab2ce6f7dbec223de22312010439f5074905e116457e86f61b",
       "size": 3686,
       "normalized_sha256": "6d0bde4867b5b3ab2ce6f7dbec223de22312010439f5074905e116457e86f61b"
+    },
+    "backend/scripts/gallery-review-export.cjs": {
+      "role": "index",
+      "sha256": "a8dfd507c57b2b40d3287991d3069b57207a9087ce4b5e8e47f6f0e80d66463b",
+      "size": 2401,
+      "normalized_sha256": "a8dfd507c57b2b40d3287991d3069b57207a9087ce4b5e8e47f6f0e80d66463b"
+    },
+    "backend/scripts/gallery-review-media.cjs": {
+      "role": "index",
+      "sha256": "5ab126c290589cd06dd5d3626e4996824835119d9c48527c28f678ad4a0f1bc9",
+      "size": 3834,
+      "normalized_sha256": "5ab126c290589cd06dd5d3626e4996824835119d9c48527c28f678ad4a0f1bc9"
+    },
+    "backend/scripts/gallery-review-scan.mjs": {
+      "role": "index",
+      "sha256": "2e2566c3de11b562c2e3c638d174c55a4f26440e66e693fd77624e3729e10813",
+      "size": 2886,
+      "normalized_sha256": "2e2566c3de11b562c2e3c638d174c55a4f26440e66e693fd77624e3729e10813"
     },
     "backend/scripts/identity-enroll.cjs": {
       "role": "index",
@@ -366,6 +421,36 @@
       "sha256": "d9e6229c94897e38b15194a69e1452f6b620651ba4a0600d563f4a0193f93f5a",
       "size": 12155,
       "normalized_sha256": "d9e6229c94897e38b15194a69e1452f6b620651ba4a0600d563f4a0193f93f5a"
+    },
+    "backend/src/__tests__/integration/galleryFixes.scenarios.cjs": {
+      "role": "observe",
+      "sha256": "76e3e4fae0e1f6994edbbffab83abb57e6fab0a7bc168902d3ab175137890119",
+      "size": 10413,
+      "normalized_sha256": "76e3e4fae0e1f6994edbbffab83abb57e6fab0a7bc168902d3ab175137890119"
+    },
+    "backend/src/__tests__/integration/galleryMachineBatch.scenarios.cjs": {
+      "role": "observe",
+      "sha256": "ff66148647f87471cb9c24293e41015b4db8471e927ed5d962feb1f8f13a6f65",
+      "size": 4766,
+      "normalized_sha256": "ff66148647f87471cb9c24293e41015b4db8471e927ed5d962feb1f8f13a6f65"
+    },
+    "backend/src/__tests__/integration/galleryModeration.scenarios.cjs": {
+      "role": "observe",
+      "sha256": "af63575f4570d44fb2e16909af42872b4ca7003d80e0b0f94095c2ae006a4cf9",
+      "size": 7593,
+      "normalized_sha256": "af63575f4570d44fb2e16909af42872b4ca7003d80e0b0f94095c2ae006a4cf9"
+    },
+    "backend/src/__tests__/integration/galleryModeration.standalone.cjs": {
+      "role": "observe",
+      "sha256": "4a9979ba64d6ba67062ffca140c59585b983b04695d9da4b37572d47a927cd3e",
+      "size": 19791,
+      "normalized_sha256": "4a9979ba64d6ba67062ffca140c59585b983b04695d9da4b37572d47a927cd3e"
+    },
+    "backend/src/__tests__/integration/galleryReviewScan.test.mjs": {
+      "role": "observe",
+      "sha256": "fe9513b6de20fda43f170b77a79b5357e0f2d40c8b0aa0957e54c760dba4c514",
+      "size": 2889,
+      "normalized_sha256": "fe9513b6de20fda43f170b77a79b5357e0f2d40c8b0aa0957e54c760dba4c514"
     },
     "backend/src/__tests__/integration/imageSafety.standalone.cjs": {
       "role": "observe",
@@ -1668,9 +1753,10 @@
       "normalized_sha256": "6efe634fd79f6238f60e0542ae8caf31a6ea18f94305a52f3fbe9eca3e57839d"
     },
     "backend/src/routes/galleryReview.js": {
-      "sha256": "fefe9cca9dc0c97748bf47bdf7ae286fc2556a0b983bf19c1071f064971bd166",
-      "size": 1632,
-      "normalized_sha256": "fefe9cca9dc0c97748bf47bdf7ae286fc2556a0b983bf19c1071f064971bd166"
+      "role": "index",
+      "sha256": "54a8c633a5abdeb1a7f14ab1df8dc24430ed56bef72ea84590c92fed307f6458",
+      "size": 2699,
+      "normalized_sha256": "54a8c633a5abdeb1a7f14ab1df8dc24430ed56bef72ea84590c92fed307f6458"
     },
     "backend/src/routes/htmlEditor.js": {
       "role": "index",
@@ -1684,9 +1770,10 @@
       "normalized_sha256": "dd238dbd3b83dfa34024f8290c15bff7d93e24f92b6bb0c6400a7de73090aaa7"
     },
     "backend/src/routes/imageSafety.js": {
-      "sha256": "544da2edbe8fd9304257bd528acc14694941817d57382d70c8df44147bed8b13",
-      "size": 6864,
-      "normalized_sha256": "544da2edbe8fd9304257bd528acc14694941817d57382d70c8df44147bed8b13"
+      "role": "index",
+      "sha256": "02cdcf112359b1c81058d37e66d95cb8ae1f35ab05fc8881935bd35941823bdd",
+      "size": 6304,
+      "normalized_sha256": "02cdcf112359b1c81058d37e66d95cb8ae1f35ab05fc8881935bd35941823bdd"
     },
     "backend/src/routes/knowledgeRoutes.js": {
       "role": "index",
@@ -1768,9 +1855,10 @@
       "normalized_sha256": "1f1651712453086237cc8ba72c462bd6d3ddb2c28c4226f94558d39ef5d0a144"
     },
     "backend/src/routes/videoSafety.js": {
-      "sha256": "b9ed336c4b387c9e3deee0e8325b83e3be77bcf579c72717a6089ec3a5a2cec4",
-      "size": 2414,
-      "normalized_sha256": "b9ed336c4b387c9e3deee0e8325b83e3be77bcf579c72717a6089ec3a5a2cec4"
+      "role": "index",
+      "sha256": "98172707b520fe48584ce01802fc00e37ae57ab9c709f020f5f0062830538573",
+      "size": 3523,
+      "normalized_sha256": "98172707b520fe48584ce01802fc00e37ae57ab9c709f020f5f0062830538573"
     },
     "backend/src/routes/websiteArtifacts.js": {
       "sha256": "0cab551a5553f534ce7e1362f29ab19426b0db969b5349597202c1fd2112ca15",
@@ -2225,10 +2313,35 @@
       "size": 368,
       "normalized_sha256": "3346269983a915b7807924cb7cca82db1d607327cfdd6e569f8156196a5b2196"
     },
+    "backend/src/services/galleryHistoricalScanService.js": {
+      "role": "index",
+      "sha256": "19590ad63a9fafa2558a0c94e2aa2ae3495f6a3ffd338099cb71a5cb1877ea4f",
+      "size": 5615,
+      "normalized_sha256": "19590ad63a9fafa2558a0c94e2aa2ae3495f6a3ffd338099cb71a5cb1877ea4f"
+    },
+    "backend/src/services/galleryMachineReviewService.js": {
+      "role": "index",
+      "sha256": "f8772f4b67d64ea315014511967e3d6ae2e5c4692449bc116b9506906ce8acb7",
+      "size": 8723,
+      "normalized_sha256": "f8772f4b67d64ea315014511967e3d6ae2e5c4692449bc116b9506906ce8acb7"
+    },
+    "backend/src/services/galleryModerationService.js": {
+      "role": "index",
+      "sha256": "846d1489c5b8fb802f44a69865ad2a4710a1a2b0d19f3e0a822d201ba10c4fbe",
+      "size": 7369,
+      "normalized_sha256": "846d1489c5b8fb802f44a69865ad2a4710a1a2b0d19f3e0a822d201ba10c4fbe"
+    },
+    "backend/src/services/galleryReviewQueueService.js": {
+      "role": "index",
+      "sha256": "f28817618053513813f81ac7728d98a37d226c7705313929e862b724f842fc27",
+      "size": 8164,
+      "normalized_sha256": "f28817618053513813f81ac7728d98a37d226c7705313929e862b724f842fc27"
+    },
     "backend/src/services/galleryReviewService.js": {
-      "sha256": "7f9e6901e9880badc0df88d42b42031cdde36d2ad954ec2228e8a5d55aca0850",
-      "size": 4182,
-      "normalized_sha256": "7f9e6901e9880badc0df88d42b42031cdde36d2ad954ec2228e8a5d55aca0850"
+      "role": "index",
+      "sha256": "a850d733eb190e5b6d2a3bac2f819671dd822ba1cdfa0a268e9113ad8736ae88",
+      "size": 5085,
+      "normalized_sha256": "a850d733eb190e5b6d2a3bac2f819671dd822ba1cdfa0a268e9113ad8736ae88"
     },
     "backend/src/services/healthCheckService.js": {
       "role": "index",
@@ -2257,9 +2370,10 @@
       "normalized_sha256": "882a3ace416e11f81024f284853e8ed0f9a5d813b80819c0efdde0161257b144"
     },
     "backend/src/services/imageSafetyService.js": {
-      "sha256": "0b4d6233e2d393990da8cdc524225e3160cef05c92a36d92a46699f929fe71bb",
-      "size": 12213,
-      "normalized_sha256": "0b4d6233e2d393990da8cdc524225e3160cef05c92a36d92a46699f929fe71bb"
+      "role": "index",
+      "sha256": "3cbecff219235ec0bc0b5d7e59e9f4f0338f23bfb4734592c6880cb9f7bfbf6e",
+      "size": 13513,
+      "normalized_sha256": "3cbecff219235ec0bc0b5d7e59e9f4f0338f23bfb4734592c6880cb9f7bfbf6e"
     },
     "backend/src/services/imageService.js": {
       "sha256": "be431c1f22a58c9f1dfb26031c0b3e41afcb902c395d116a5ecf9275aad6689c",
@@ -2405,9 +2519,10 @@
       "normalized_sha256": "271a56dcace89f3f9bbff5c07ea88e7790faf8ae3532d91ff0b7cda87b71edbd"
     },
     "backend/src/services/videoSafetyService.js": {
-      "sha256": "57934db392aa661028b5bd74410d44ab85a4e3c8b7a58aa8a95187691746b155",
-      "size": 9754,
-      "normalized_sha256": "57934db392aa661028b5bd74410d44ab85a4e3c8b7a58aa8a95187691746b155"
+      "role": "index",
+      "sha256": "44865df03026de7e41949ed73f476bb8e0b9465c60a693f9edcfc26d8aa7ccc2",
+      "size": 11953,
+      "normalized_sha256": "44865df03026de7e41949ed73f476bb8e0b9465c60a693f9edcfc26d8aa7ccc2"
     },
     "backend/src/services/videoService.js": {
       "sha256": "580aed60434817e343541cf4ced95c551011a53aa56e84965fd3c167edaec2af",
@@ -2563,9 +2678,10 @@
       "normalized_sha256": "6db23e63780b3a9da7edfd48f84a6ebf1f703611c64e97743997bdb3a4fae5a0"
     },
     "docker/Dockerfile.backend": {
-      "sha256": "99781a0ea8fb3b4b9f67c2f484690c9de4dc1e99b9fe11dfc7d44ef15a8031a2",
-      "size": 3123,
-      "normalized_sha256": "99781a0ea8fb3b4b9f67c2f484690c9de4dc1e99b9fe11dfc7d44ef15a8031a2"
+      "role": "index",
+      "sha256": "c2a3249a54c87bde64d2096d7daec9af141888754ee8f0f14b3050faad8eaeef",
+      "size": 3365,
+      "normalized_sha256": "c2a3249a54c87bde64d2096d7daec9af141888754ee8f0f14b3050faad8eaeef"
     },
     "docker/Dockerfile.frontend": {
       "sha256": "6e3489f2dc7ea9427b3fbe8da341871918386e9433497e9edb470ab47cf9346f",
@@ -3253,9 +3369,10 @@
       "normalized_sha256": "4f8a6904ae5b6effd28cacba7067269ea2ed896c837b828872ebca18f1773c1f"
     },
     "frontend/src/components/admin/settings/GalleryReviewSettings.jsx": {
-      "sha256": "7595ffd52c4943f62db281c1a76c1493f727dd388f86766a6ed24a08778be90e",
-      "size": 4629,
-      "normalized_sha256": "7595ffd52c4943f62db281c1a76c1493f727dd388f86766a6ed24a08778be90e"
+      "role": "index",
+      "sha256": "93e585de2a2147a3c12437a123861e7a1cf68e72813df764e0c2b7a1a69e265f",
+      "size": 12423,
+      "normalized_sha256": "93e585de2a2147a3c12437a123861e7a1cf68e72813df764e0c2b7a1a69e265f"
     },
     "frontend/src/components/admin/settings/HtmlEditorSettings.jsx": {
       "sha256": "55face46eb503730639165043793101628f063e3a3a41a591c9c6766a1fad1b6",
@@ -3884,6 +4001,24 @@
       "size": 677,
       "normalized_sha256": "0d5a00b966b80457c3bfe6ece828ce1e38909a25a91aa037ce0d1dda1c9d08a4"
     },
+    "frontend/src/components/common/GalleryMachineResult.jsx": {
+      "role": "index",
+      "sha256": "435e99f81fc9f76ad8b5fe43a599cedce70f10de6e09a0f910bf610ba1fbcd14",
+      "size": 1463,
+      "normalized_sha256": "435e99f81fc9f76ad8b5fe43a599cedce70f10de6e09a0f910bf610ba1fbcd14"
+    },
+    "frontend/src/components/common/GalleryReportButton.jsx": {
+      "role": "index",
+      "sha256": "28212b14c1d0549220b9a471920878d92c6b9a6e01b066077c60486bcab650cf",
+      "size": 2391,
+      "normalized_sha256": "28212b14c1d0549220b9a471920878d92c6b9a6e01b066077c60486bcab650cf"
+    },
+    "frontend/src/components/common/GalleryReportButton.less": {
+      "role": "index",
+      "sha256": "3c735b2d9261b42cdc51adb96d9826e0fa68c3613f5eff394faa8fa5f9fc4d37",
+      "size": 639,
+      "normalized_sha256": "3c735b2d9261b42cdc51adb96d9826e0fa68c3613f5eff394faa8fa5f9fc4d37"
+    },
     "frontend/src/components/common/ImageViewer.jsx": {
       "sha256": "d4946f4a0dd2d7c7cbba547ded7e4b9a5ac54de112cdcad370e93011a86bb400",
       "size": 18124,
@@ -4225,9 +4360,10 @@
       "normalized_sha256": "f699a3f865ab965e3166634c585c85c5838d6601938a12c36f022d99f0670fce"
     },
     "frontend/src/locales/en-US/image.json": {
-      "sha256": "0193095b761843df44936540e2419da77b045be5ecb8c798446fbc4710147e91",
-      "size": 12738,
-      "normalized_sha256": "0193095b761843df44936540e2419da77b045be5ecb8c798446fbc4710147e91"
+      "role": "index",
+      "sha256": "eac9a2e87826ad81fb4828261eb3094f500dcdc90778bfb9b3691b6b9e94e551",
+      "size": 16239,
+      "normalized_sha256": "eac9a2e87826ad81fb4828261eb3094f500dcdc90778bfb9b3691b6b9e94e551"
     },
     "frontend/src/locales/en-US/index.js": {
       "role": "index",
@@ -4264,9 +4400,10 @@
       "normalized_sha256": "6800cdca886f6e9ea8eeacf7a9cbdbcd75dfbdd4eb82acc4f9785e407c37183b"
     },
     "frontend/src/locales/en-US/video.json": {
-      "sha256": "8ccd2eaf7ab982e62f959d205b4bb055f6f2c764e8e8a9cd22a656e9497050a5",
-      "size": 7741,
-      "normalized_sha256": "8ccd2eaf7ab982e62f959d205b4bb055f6f2c764e8e8a9cd22a656e9497050a5"
+      "role": "index",
+      "sha256": "2f4d8beecc1b5be1bd18443d9460bba1b1cfce58e0057d8ad5018e40dced0e7d",
+      "size": 8159,
+      "normalized_sha256": "2f4d8beecc1b5be1bd18443d9460bba1b1cfce58e0057d8ad5018e40dced0e7d"
     },
     "frontend/src/locales/en-US/wiki.json": {
       "role": "index",
@@ -4327,9 +4464,10 @@
       "normalized_sha256": "27bf64d06da9b9795cb838b9c1831010378e28accb7901c932cf9bcf99b9cad8"
     },
     "frontend/src/locales/zh-CN/image.json": {
-      "sha256": "65f328c1ad2ec6a6e1764dc8fcf70773e0ffdb408fe7ba094998d5429be0f00a",
-      "size": 12468,
-      "normalized_sha256": "65f328c1ad2ec6a6e1764dc8fcf70773e0ffdb408fe7ba094998d5429be0f00a"
+      "role": "index",
+      "sha256": "9cdd477f908b5cda170af960cdd39e7f5cd8fe9945248cf42ecbab926642e045",
+      "size": 15665,
+      "normalized_sha256": "9cdd477f908b5cda170af960cdd39e7f5cd8fe9945248cf42ecbab926642e045"
     },
     "frontend/src/locales/zh-CN/index.js": {
       "role": "index",
@@ -4365,9 +4503,10 @@
       "normalized_sha256": "f51a4ec23cda942f6c1e722fe8badae129dac128c6d8305734cb6f75a7830ac8"
     },
     "frontend/src/locales/zh-CN/video.json": {
-      "sha256": "86c60d4670fe58c9724e94fe05f59ba9f75066e7a0d19961866a8a9535c68192",
-      "size": 7488,
-      "normalized_sha256": "86c60d4670fe58c9724e94fe05f59ba9f75066e7a0d19961866a8a9535c68192"
+      "role": "index",
+      "sha256": "4146ea68f3471c0f432195db5e17d86f38564f884697b9f2a1185fb58097790c",
+      "size": 7779,
+      "normalized_sha256": "4146ea68f3471c0f432195db5e17d86f38564f884697b9f2a1185fb58097790c"
     },
     "frontend/src/locales/zh-CN/wiki.json": {
       "sha256": "92bb2a5b09495128efa624ebd73eee11052c68efdb2b4c9320c38f9dad20f0c9",
@@ -5006,9 +5145,10 @@
       "normalized_sha256": "1f15ced2372e1c022d540679e98296971d750ee09ad0e4538f5efd5884caef37"
     },
     "frontend/src/pages/image/ImageGeneration.less": {
-      "sha256": "a64fdb844ea9ae18ea38952ab237be34da88499f11909f5ebd36bcf757332b7d",
-      "size": 24187,
-      "normalized_sha256": "a64fdb844ea9ae18ea38952ab237be34da88499f11909f5ebd36bcf757332b7d"
+      "role": "index",
+      "sha256": "b79186d783a9a432095c8760d8cfb01db339c48a4f22b594f65e6f95fa8746c4",
+      "size": 24433,
+      "normalized_sha256": "b79186d783a9a432095c8760d8cfb01db339c48a4f22b594f65e6f95fa8746c4"
     },
     "frontend/src/pages/image/components/GenerationPanel/MidjourneyUploader.jsx": {
       "role": "index",
@@ -5046,9 +5186,10 @@
       "normalized_sha256": "7550f82685fc2cfb1adeabf15734c3d91e8de206f836b5e82bc85d2bbf61ca1b"
     },
     "frontend/src/pages/image/components/ImageGallery/ImageCard.jsx": {
-      "sha256": "7f096111fe23aaad1268ab0166fd14c2b7587f016a6464ad97cbb61cd67cb3eb",
-      "size": 18366,
-      "normalized_sha256": "7f096111fe23aaad1268ab0166fd14c2b7587f016a6464ad97cbb61cd67cb3eb"
+      "role": "index",
+      "sha256": "42da9a728c914b9381ffcf1c22677b2d7dffa00438625640227fff7b308e1aa2",
+      "size": 18247,
+      "normalized_sha256": "42da9a728c914b9381ffcf1c22677b2d7dffa00438625640227fff7b308e1aa2"
     },
     "frontend/src/pages/image/components/ImageGallery/MidjourneyActions.jsx": {
       "role": "index",
@@ -5250,9 +5391,10 @@
       "normalized_sha256": "75605837d1eed456c9c8199978881f4852cb19445bf8d355c7835fe612ca685e"
     },
     "frontend/src/pages/video/VideoGeneration.jsx": {
-      "sha256": "4e87d6c94935b4cdcfdbf6b431a00db412c6e0b967507d252fecfe369711bc37",
-      "size": 42775,
-      "normalized_sha256": "4e87d6c94935b4cdcfdbf6b431a00db412c6e0b967507d252fecfe369711bc37"
+      "role": "index",
+      "sha256": "9287703adf7b47e214d8ffc9d7db52366b2381aadd72f5b3a0346328a77b6616",
+      "size": 43412,
+      "normalized_sha256": "9287703adf7b47e214d8ffc9d7db52366b2381aadd72f5b3a0346328a77b6616"
     },
     "frontend/src/pages/video/VideoGeneration.less": {
       "sha256": "987e5f986cfcd7084f8f430118cef937d54858a408e91aacc25ee06fd4783612",
@@ -5369,9 +5511,10 @@
       "normalized_sha256": "a6b490d97ce27c86cd8d4bd2d6c0543390556f5f1872c58342660f2da6a4fa85"
     },
     "frontend/src/stores/imageStore.js": {
-      "sha256": "88333d08b0056cf1f0deb9a8a6a016c575f83a39397398248633b8266134ec7b",
-      "size": 17951,
-      "normalized_sha256": "88333d08b0056cf1f0deb9a8a6a016c575f83a39397398248633b8266134ec7b"
+      "role": "index",
+      "sha256": "6525de32e96e998b754c733697adb0bd3c592ce993e22b73cca974a67e3c20b9",
+      "size": 18177,
+      "normalized_sha256": "6525de32e96e998b754c733697adb0bd3c592ce993e22b73cca974a67e3c20b9"
     },
     "frontend/src/stores/knowledgeStore.js": {
       "role": "index",
@@ -5420,9 +5563,10 @@
       "normalized_sha256": "4ee2478ee0f8f75f9c60f69d59bb41229954e99ccda434011b92c2072f45ae77"
     },
     "frontend/src/stores/videoStore.js": {
-      "sha256": "573b73dc367769566861c5018d325e823eaf710908b0877510482551c8bf0bdd",
-      "size": 16405,
-      "normalized_sha256": "573b73dc367769566861c5018d325e823eaf710908b0877510482551c8bf0bdd"
+      "role": "index",
+      "sha256": "260127c5ea6c5c85de996f87f45db533f888345f4412b61701f1892982a23680",
+      "size": 16542,
+      "normalized_sha256": "260127c5ea6c5c85de996f87f45db533f888345f4412b61701f1892982a23680"
     },
     "frontend/src/stores/wikiStore.js": {
       "role": "index",
@@ -5660,6 +5804,78 @@
       "size": 444,
       "normalized_sha256": "39a6f2de548c76adb7fadfa4ae948b1cd19e742e9d5bba8d77b0e06666639182"
     },
+    "packages/content-review/README.md": {
+      "role": "index",
+      "sha256": "61cc7b1db9b06023469ea8b87b91ec321013ffa1cc67647d0a953d2857a6dbd3",
+      "size": 10711,
+      "normalized_sha256": "61cc7b1db9b06023469ea8b87b91ec321013ffa1cc67647d0a953d2857a6dbd3"
+    },
+    "packages/content-review/benchmark.js": {
+      "role": "index",
+      "sha256": "05bb620de8ce7abf560261b0f7243fdc52c9451a018dc6be5eb09586a92f0ffe",
+      "size": 5595,
+      "normalized_sha256": "05bb620de8ce7abf560261b0f7243fdc52c9451a018dc6be5eb09586a92f0ffe"
+    },
+    "packages/content-review/docs/审查标准.md": {
+      "role": "index",
+      "sha256": "3bd48195957672356165afe8cd5438b0ca14a8d57d68c49dc1d126ff5baee5da",
+      "size": 14490,
+      "normalized_sha256": "3bd48195957672356165afe8cd5438b0ca14a8d57d68c49dc1d126ff5baee5da"
+    },
+    "packages/content-review/index.js": {
+      "role": "index",
+      "sha256": "19bf697e0db728ecf29bf819d08dfd56149eb436405e2771bd695da7450f5b85",
+      "size": 12259,
+      "normalized_sha256": "19bf697e0db728ecf29bf819d08dfd56149eb436405e2771bd695da7450f5b85"
+    },
+    "packages/content-review/openai-adapter.js": {
+      "role": "index",
+      "sha256": "769e86c7d040b95b2d4f71a485faeee927520f7dfcef634679d78294c3e70009",
+      "size": 2313,
+      "normalized_sha256": "769e86c7d040b95b2d4f71a485faeee927520f7dfcef634679d78294c3e70009"
+    },
+    "packages/content-review/package.json": {
+      "role": "index",
+      "sha256": "06151391f809edd853a7d333011cd14baaad90dcffa11968a4a42fc8b8eb540f",
+      "size": 297,
+      "normalized_sha256": "06151391f809edd853a7d333011cd14baaad90dcffa11968a4a42fc8b8eb540f"
+    },
+    "packages/content-review/policy.json": {
+      "role": "index",
+      "sha256": "a4e2bcb009e08571dda356b417a4491032251ae99815e13cf41c353d1fa3cb05",
+      "size": 2103,
+      "normalized_sha256": "a4e2bcb009e08571dda356b417a4491032251ae99815e13cf41c353d1fa3cb05"
+    },
+    "packages/content-review/standard-reference.json": {
+      "role": "index",
+      "sha256": "8432b2a6525830d0156274b36edfeef74721f70ab189e0361f81d2d95c98f8c3",
+      "size": 647,
+      "normalized_sha256": "8432b2a6525830d0156274b36edfeef74721f70ab189e0361f81d2d95c98f8c3"
+    },
+    "packages/content-review/test/benchmark.test.js": {
+      "role": "observe",
+      "sha256": "a5f5bdb154abf37cacc6a5cb65ef40822530ec3f7c894a6b094a2d72779e0719",
+      "size": 2456,
+      "normalized_sha256": "a5f5bdb154abf37cacc6a5cb65ef40822530ec3f7c894a6b094a2d72779e0719"
+    },
+    "packages/content-review/test/prompts.json": {
+      "role": "index",
+      "sha256": "601d98c24d80363922d50aa9439d34e02b7366d25213301aa1582381ee98fd17",
+      "size": 4948,
+      "normalized_sha256": "601d98c24d80363922d50aa9439d34e02b7366d25213301aa1582381ee98fd17"
+    },
+    "packages/content-review/test/review.test.js": {
+      "role": "observe",
+      "sha256": "6a644b85037d90d34e3773c1bb20a166f0b87a0e3ab8dcd146adda416e810c31",
+      "size": 7351,
+      "normalized_sha256": "6a644b85037d90d34e3773c1bb20a166f0b87a0e3ab8dcd146adda416e810c31"
+    },
+    "packages/content-review/test/standard-binding.test.js": {
+      "role": "observe",
+      "sha256": "f3e4819dfd2034e07bf1751c08f0868818cc00e88a97c0c4fff5793427cf1320",
+      "size": 1024,
+      "normalized_sha256": "f3e4819dfd2034e07bf1751c08f0868818cc00e88a97c0c4fff5793427cf1320"
+    },
     "rebuild.sh": {
       "sha256": "3c3855b70a48398ea91b3a8fc6adf2cebf2eeb9b99d1688f21a05c52d11ca42b",
       "size": 12215,
@@ -5745,5 +5961,871 @@
       ]
     },
     "apply_authorization_mode": "auto"
+  },
+  "database_cognition": {
+    "version": "database-cognition-binding/v1",
+    "entries": [
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/agent_api_call_logs",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "25b51411b948faff4e76aac1d1b8e6f6b664e63110ebff8fbc945757391b0637",
+        "entry_sha256": "eb74cd99f93df0d234203e2f52dded50a96564bb06392e354baefbe2c469a7a2"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/agent_api_keys",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "be6aeba176b70392d43986802c6dee1cf6c191d492b0b285d7b4cd844fbf1fd6",
+        "entry_sha256": "cf6d2f78bd77898fa3bef1158724d583b9094457f134cb8849da551d66027683"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/agent_executions",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "43f0563441b7d1f4172aa280ea3deef4a5e0b01aede1e4d6e31d05e225a8f8da",
+        "entry_sha256": "6549e352302f0c5b17ba0a60ddf83032655001588557df2c9e5dc264a1e32cce"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/agent_node_executions",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "ed79081431a6ba84398a1fb7e170ffbbe6204bdfbfe9b61dbce1de7389cc6769",
+        "entry_sha256": "c5f31df78a1196d18f70d2b6b885c8207bb2a2c6f0a87744beb277ac3b86e0cb"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/agent_node_types",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "deeca768a78192feddcc727e30f9d56c23ab16deeffeb8d98c2077b86ee9c826",
+        "entry_sha256": "cfc5ee500c71a2f14117dc5014c197a4b195012dccb49ecf8aeb24b00cbce132"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/agent_workflow_templates",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "dc923fd08f495280cfb90ba6342fb82c19193dc41d5e51a388139717d95c7b3e",
+        "entry_sha256": "d3ae723d7ac3f450b28527a98d92d832cf5afc97c733b3a89e9ed6e16617b388"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/agent_workflows",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "e5ecfdfffd19f1208e38d49ed48aa942f1c2aae9a8b56ab0a44cecae2d0ca265",
+        "entry_sha256": "81f4cd2064f1d9e37e25c8e7bb907e31eface740a50c13aea9f12eef4bd15ab8"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/ai_lab_datasets",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "dcfcefe491a0e4e30f94e8ac4817fb0de5fd801c0ddd562aefd7c28941155e24",
+        "entry_sha256": "b35e84e0503948f8eeda0ace1411ae995ed78603746089410a7ea769e2cdde9c"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/ai_lab_evaluations",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "b1fe3f1a1e2ae31072c973b06c21feafb6d9fd20a676ae099bf3a53b9753fa15",
+        "entry_sha256": "8ff017f9a72c1ba732e22fa5338755e849329b94012a0250f9f23a433f134699"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/ai_lab_events",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "af4d6029624db584e0de76b43449654fd175c3355f0bdfcccf47160e90e26953",
+        "entry_sha256": "b749b2b89565ba0d5dcb8348c9ab4718559152b14483dba4698276a9be452ab6"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/ai_lab_models",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "e146bd91db75e42ee1f8933af005bcff37036791ceef91885cdbc0a9056dd304",
+        "entry_sha256": "b36eeb2accedc9f5132947b21d484b031e20fe99c702454c88b274f33f402744"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/ai_lab_projects",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "a920d9e97d33586bfeecb28ce8feebea4082cbad52de8e627bb10680af28f3a5",
+        "entry_sha256": "7bb8badb8aa40b6fc032614732402cfac9c54d1ed07c98f13e0c902d18754557"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/ai_lab_samples",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "ad46cb29143d81209164e1a58085eb7f02a583e8279c96c48e3fcdd93a657650",
+        "entry_sha256": "b26eff44e1c1d632758cff82771ff8d7958439284eb1b3368e4ea0d963248e59"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/ai_model_groups",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "caea157882f3eef1c2a4289208c7c0996ccf0ad79d17e46166fd96ac229f4c3e",
+        "entry_sha256": "ee5334cbf77d6eda1ddcb76742a0016b2a067d3d0a6bb053e7c4949c265abecb"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/ai_models",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "7e1eb6ba570ee40c68c7daab6d8de5e3f4db05872d8cbe53b90eb70c41dcdcdb",
+        "entry_sha256": "1c281db9e63bc1df4b66a61b256f98719246e88dbddd54f3ca4476845d8d1a74"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/api_service_actions",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "f1ed744858db79787cf4a80fa6dec26eaa2b840974a64a6589ff8f0bb64472a6",
+        "entry_sha256": "1ecc769bf16a238c3119aa0330751858184f7a01f91d4b11504e863ebd7a500f"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/api_services",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "4e5ead8813b33a49c95b6d03bfe6e2d9e24f6c51395fbf9fc10e4b872af4148d",
+        "entry_sha256": "8a6542fa84bd1ef194d7b1ba9ca5850c3f4b9d73d430a08d33d526b05a28b9ed"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/application_form_config",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "9ca5eda34c51062f44035b6181376e362321399bd7550521a2e4df48f59f54ab",
+        "entry_sha256": "b099bebc4e6c8f25433ea793f9a9199699f28f21b1218d18dd89d696e9f1d5d6"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/billing_logs",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "d723a36e17528cee738b6d366f133e89153270a0aecc844ec379c5f41fa17150",
+        "entry_sha256": "c39d71bf9884aa7b00ffeba7f7e111f25be8bbb0d20a30a824ced2409bf4fd57"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/calendar_ai_analyses",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "e5154ae74fab751c934f392e62ccea5aac59f741c28f2d468ac9a810bdf41315",
+        "entry_sha256": "a5f3791e7507ce8deb682732a7fc05a71b3c4a6648e779846b50ed267fe0b7d0"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/calendar_background_knowledge",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "0f9c27aedb11f89b9be1a503441ef47d2b706e65a04eab0a2098478d88079b9a",
+        "entry_sha256": "d920867acf36b0e5c809c9ae48908bc48ab831a253e429e64758c85ceb6f4a78"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/calendar_categories",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "f6ebd216526dd74ebff94ded770f9649b5d1224b18cdcf3e6cb9befeda474298",
+        "entry_sha256": "f5484bd00b734539ba6ab5d47e7dd8e3637581b70359197c04fafcb382f4f68c"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/calendar_config",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "ee70b423569a63a45dd13cc1141795037ec25b27b70714ee7282350d72bfe492",
+        "entry_sha256": "1771760c6e07e7ab08d5ff4234835505b79a931a31dce1f197f5d21a643b0b33"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/calendar_events",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "59e495395174c57896bd40701162106bd1f2e3c0fc9aece7a7eb4c372d671bea",
+        "entry_sha256": "3f186c1072a586fdfac1f56c3195632a0df0673c0b287b105db116fba2a0cb56"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/calendar_prompt_templates",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "5990ece98fa8a809ce56e8eba0a7402b5b672269a920e3539a210184ed10d89d",
+        "entry_sha256": "bded6b1829267fda54b49257b5aaec4f830801d55dab01af846050ab87003adc"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/calendar_prompt_templates_backup_20251011",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "23d99e8b14f4f0b90f3c44380833a6c1dd1b6ae0e44289909c6512338e1bae2e",
+        "entry_sha256": "6583e76043d2b96718bc02aee295bfb0b05080f689495759dc5f34ad01534450"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/calendar_user_settings",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "82600f215a85b824b6321541f54eccd11dd3bca5b17c82bf51d603112794b8f7",
+        "entry_sha256": "f655b6d2e696f8eeafa55e08e25a89ce133a69e318d2fe1484361a2467ebfcac"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/casbin_deny_policies",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "6a08aca49f821d3e0144f0be6eff272b1292fc06c1c687064dc0c015f83bff53",
+        "entry_sha256": "9afa9048550c6cba4432855ca41ae49d7c1c28989c77ecb7b684ed7d41cc1842"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/casbin_metadata",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "d986142ab4eb026836af351edb1f6aeb57b95663adc6473e955e6ec029bbadd4",
+        "entry_sha256": "56dc7d5e215e8fc70dc1bbdae181a6e38cbb973d1a26618f7272f5c24c4b6f77"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/casbin_rule",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "953a873824be756fac2830fbc5b1036c384213293504eb07c6d25e4686c38d53",
+        "entry_sha256": "4fcd910da5c7990f9186f3d7088cb00fea454a041bc0329bd22dc32b2083c7c2"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/conversations",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "58aa2ee722b7ce7b67205b7235b78b19952f41b4a0e2e2edc388c98ba446017e",
+        "entry_sha256": "911e64fb76296f9a5cd107d67c1764b91c4b2c3ab70b6256e97f7730c14fe1f7"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/credit_transactions",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "44b93cb92278a922d93b2c3b326166280e338328b30ae4484e91874ace4e6f09",
+        "entry_sha256": "d154b283be2cb3ea1174a7fbd1b96d94c782f1c4caab2c913d53154287a69dea"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/doc_templates",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "36cda6f972b590cc4f14d6cf3967f9f34fdfdeb107b8892ff29e5fb99bd22761",
+        "entry_sha256": "dee6c30836c1514cb1f0035a21449b6ea8fb67a7418a4c2fcb4b19daa864418f"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/file_shares",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "9c885bdc274f105e0a54735efaf073c10a631c7fbd960c1a37845f03fd4a0889",
+        "entry_sha256": "717bd73fa5bdcce510e3c08d3d1fb9c779a29902a68f35b9829b88d095001085"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/files",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "1fe46ed9428fcd23132687611311efbcaf2ffc3e8f9177ca3afe673128414abd",
+        "entry_sha256": "bee9512ed8cbe4d491b00e29f02ab686e67b83af7cf0b53e5507aaf4c46267ee"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/forum_attachments",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "b1d0b77a922e2a15bea80bdbc8df27879a0f8df6904621d6a50acffc4614df6a",
+        "entry_sha256": "63058ef39bb77892dec4bc0959f4c4df727e4be0b619b545b9c19c98ff461113"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/forum_boards",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "a811b955f106aee50a91cdcc5c57b0a84f3cd2679990e032652b7d270ea43d17",
+        "entry_sha256": "d8c88bb24c03cf3503ec58436028f91d5322dc6f807ac37482e9123b0c53e706"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/forum_favorites",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "c82800e7a0727f7a87618a19294a55f6cf1cd852da8a8987e27e51321e30713f",
+        "entry_sha256": "32ca8b137c2240e5fb43792a3e97f49dcf89783ae833e39053c3855576803d53"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/forum_likes",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "7ab4150abfc61ffa3424a71a93191e0d5ccbd9576b9d30d58dc297bd9cfa7c64",
+        "entry_sha256": "3c888d7acc8917a639bf27da470d3b155bb9415f099ec2b557c06a03779cff6b"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/forum_moderators",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "d5b9f508629cb41a3972bc0dd4c17e4c4e77e4e2881240c723de58ca06c8b977",
+        "entry_sha256": "fe0b2f4415869901bb4f286558cc850918233dcefc1f3ef01950b77a03510350"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/forum_notifications",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "2889561bfd8ab30f3fbdb736c0e18dcabecee68c2e73c63c614f40798f545429",
+        "entry_sha256": "186487f71c4e449bdb6254a661b100e983f0be97465d690a809d9d2776977dd0"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/forum_posts",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "ff58a4a602f68e875b254bfd25733f4bccfb422feb341137734e44a971b91bb7",
+        "entry_sha256": "3454967a98644791272ad34cb7ca8a6d342748a79fbb41bc9e52d5117323a8e3"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/forum_replies",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "5155fd03f2c7f0a3080f3c5c6563ac6524803dc4c4105729829c179f735a0c93",
+        "entry_sha256": "34efea77d7686df840542a7588c5811643ce455b30a732231e36725eaeaaa5d8"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/gallery_machine_reviews",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "965723f01ba5752102950361e7267e17bb8e420a7d41aa3c007380ef6bdc133f",
+        "entry_sha256": "be93c882ddbb6c4eed98dc1b3b87c6700d0e3ee122590f06df812fa8d3f4d65b"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/gallery_publication_control",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "107bb4acd52bfd9c25fd0371218c85c53982ccc0159c3cf5372dbafd62552527",
+        "entry_sha256": "8d4f89d1693550774c6f0d39628d82a889b0a6a7b1bef14d03d05c07b3273d15"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/gallery_publication_control_events",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "3a337c999d071b85158a4b0440cb32935900fa92b9f2c09865eec3c110375975",
+        "entry_sha256": "d96165816843303e3e3ebb8edbbbe83572fe5e6ce488c31f3d1f9c3ed6fd61ce"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/gallery_scan_actions",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "816a5e8691adfb8bf2572fa1e63f664a195ad18731432cf9ba5f58e03c477c72",
+        "entry_sha256": "c8fc1851b65ce555ad5284b2d53ea61a66bca622c4430c2e748f8110f64b107e"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/gemini_files",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "46d804a6e07d19ce4018fba99de4fe31f572eb951d8f3ed39d8c2fe98cbedabc",
+        "entry_sha256": "20ba1a117df9bcf5740e2c3c53aa2875a951f3cf9920427b0914cd678167337a"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/html_pages",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "758e656eab92f90ed72d38a9a9e1e017c7e2cee6f2e0e12f857b18ee649366c6",
+        "entry_sha256": "3ad2f4a615d63de81a79a840f0f41e5a91a5fe49897bf405d430034e1a25242d"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/html_pages_slug_backup",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "fb4ad1e2cc00c7e7f7d4f9c15430754bb2ff4a3b439f630b2afd887528f4b707",
+        "entry_sha256": "734bc681122a5294c4f005d67a73875df589ff1bc7a9d0df07633b8453ea2ae8"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/html_projects",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "ad45a2b9e4a3f92214c6cc06e979010df655895e3a944b6f424f2d6b60d7706d",
+        "entry_sha256": "daae3efeae92af40c42df8396172782bbe8a5a1391679c7cae918ded14e1976c"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/html_resources",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "d3571bf71ca417d0d002bc8c519d1176aa8ff9206c15756bd59af09dd5f23f7b",
+        "entry_sha256": "4aeff088f4c5dd9192f1b8d5053cbc5495c0a542c77b2d0083a1d9ec4323293b"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/html_templates",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "935388dc4f6b88091e6976e3e03017cc9f62c123ad8893ab6e90681ec8693f63",
+        "entry_sha256": "55fd21a28e2911d7db0e36ff14d27a00e1eedbaac2a74d7ebcacab9a15556b2e"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/image_generations",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "dee0cc5e67d2785fd8961c20f4b5d142d53a56d41f11497ad173d89dd25433a4",
+        "entry_sha256": "e8d035a8deb8e864d1409f4a7ecd0361cc77d0f1b857e9bae9041d94a86eaa25"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/image_models",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "ef6b7c0e20aafd202d82102bedbdc92e36e111ee043a248c4c35c0eddea4d18a",
+        "entry_sha256": "8c81c8a3c85f1a1a610dea27b886e942e6c25d8b1c3e7c614d3b7c55ac10b580"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/image_safety",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "361c63cb0a202a506128d553a815ddaee728076a86efac8775c575587731c81f",
+        "entry_sha256": "603018e3cc4b0816fcb854d74e0d40b3c828ce76f2331901da03f93f06da106e"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/image_safety_events",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "82bfb452c4b2d913bc6f59ead40e516af8face7414542c02c367d7c364e8df59",
+        "entry_sha256": "25f78aaa52f94415c966bc64d8393ee5e25bd30f3d4994c5c1bd647665de6db7"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/image_safety_references",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "02c41fe3743ca5d2c39e5a84d29d33aa644392847747d841f3bc75f7b8412adf",
+        "entry_sha256": "c4d40ea3e43fdce1e337d059b64d6ac603ee309037d68ad88655d99a2d060ed0"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/image_safety_reports",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "9d8683423e47c70b2476b6df2ada118eb6bf1c7b2242a3abe80ed8e2bf7eb01c",
+        "entry_sha256": "9afb2ed962fefcb01d4d16763dec14f0363567c8f5bb455940b5e66540391181"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/image_safety_restrictions",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "a2026dc109fe6cec9277b471144ecfc5b47d6773469219172e20a19b1430af77",
+        "entry_sha256": "7876789ab940ae9968fcc89e08c9e91f187263bb3c38fa634d7a811482a09be8"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/invitation_code_logs",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "83fae49f60482f8ae79ae6a637571bbc342981d43a401571d567c794ddc0408a",
+        "entry_sha256": "ff6ce28d4a0f4ac569e9a1ea78322e72b16da7ce2312d5f8a4b09fb4dfc5f86c"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/invitation_codes",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "4c6c85e45ab2033e06452a4098548a6118e91b30ceaa66045ae066c4be41976d",
+        "entry_sha256": "79e92ed8656935a390e23e822c00a064a6294d22515c1d7a848405bd12ebb5b4"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/knex_migrations",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "b9a6213288e147e2a3012193bb0274db09d7f2802d7cb7c77c23355424a2cf6a",
+        "entry_sha256": "0a1566ebfaf0e843621b3226ad0bed1bc0c797ff8e8407c295dc8c490cd3bbaa"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/knex_migrations_lock",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "9ee82ed69e740850349995b30e0c4fad114c273173fd91b68fcc5b073b9934ab",
+        "entry_sha256": "d73395e6a0e1703cdaa04a7f8f83d99dead20aa325bdf826713b0ee0e97596e8"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/knowledge_module_tag_permissions",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "23c65eb170cf782932d3b99df76b68cd4be5084bb2a8cdc902a0b6e907f97b56",
+        "entry_sha256": "c2cd3ac1a5f353615a2f1f826be0994a76325cc61314ce0d0efbe4d5b98cb019"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/knowledge_modules",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "ef64fad0d4ff3e3c7932017d5b9fbd78dbf95266edcfd825c75d9125a4673d50",
+        "entry_sha256": "9783345cd043012a1785023b09f4a0c0d2c2351aabf92f8df691b80a3efc403c"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/messages",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "fa7170042d737e694f6e891b92eeda9c3d30f65306a9dbff143aa639a4883d9f",
+        "entry_sha256": "e50b29a483d33354c4f719ea56afb912c2abddca3b76b4b79fa8ff1ec8067713"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/midjourney_tasks",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "3f50be489541f9eae27bcfbd47f69911531084ad496bb4c4730922111e9073a1",
+        "entry_sha256": "99dfac59805ed4b3d8f931d7dc0c3997aedd538cbb69607964c2f45aa1ae3d76"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/migrations_history",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "5f23c2c03a09d9cc1ca2f50df91803704c837f6173953c0417d7ef6071173ab8",
+        "entry_sha256": "6c43e133df028b9b74ac7f00a7012932e51f063bc70dabadcc8be36741b606e3"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/module_combination_items",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "86a1ed1115f55ec6d0e26ad6a55d7d8dfaea72f04367bd2025394822e6ee8988",
+        "entry_sha256": "1a82f2a26bbd4706a8220e7608e40e3f7929fdf37e197d922ab63108ceff18d9"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/module_combinations",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "3a8af79d522c9be6a0c89f50a9d7e5f9335ac69dae308051b6134f0cebe08ba7",
+        "entry_sha256": "910b362330af2bb7caf608df20e63b33f81b72220c9239a08ce44481405bcd83"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/ocr_results",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "4fec8c565dd13ab99d4bdcdc0ef628f3eb9a9b65da149fc9fb1c87d2964e4211",
+        "entry_sha256": "2ced8f80a05ce35568b6fbebee42257f836c4665f6e91c78c85e0edb7ec9cd81"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/ocr_tasks",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "b0b052eb3aa40c48b06103f1ab9add5f9ed820858436d7030295de167100e294",
+        "entry_sha256": "61faa7c240a2230ce5c21bf9538a56eeffc7ccf52205cb6c70b53820607a3c1f"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/org_applications",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "cfd9b508988ea55b3b28c1bc7dca9067c6f940e26bcc1f914a28f04fd3285cab",
+        "entry_sha256": "8de84ed905f6a65c44d441eba2d532d149bf14d19bec75b2785c5ef0fb517916"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/oss_config",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "2ac241154ac368b0f8a41fc668593c6ea691a90c6c2816c59de5fa16d60e8445",
+        "entry_sha256": "532ca9b5ac62bbfe126005104c26719e3b4d73aae47c7d65a83ccc40836eb57f"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/p03_handoff_keys",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "c53b50987704f19433f3b0a4682f71dce62183e8a41da50a52264b3552cef8aa",
+        "entry_sha256": "f353a63258e80b8f7da663278c82754162ff6317b8e42d3265a78c155389f6f7"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/p03_handoff_operations",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "1bfa16e8d5cc85426676060c82022840e052806928a3f594d93c6ca50be9cf2a",
+        "entry_sha256": "e287f9730710f003f343b21e281b287be346000569357a231ec22d186b2295b3"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/p03_handoff_owners",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "71b1714b1141551d97eb6356e2a86dd9f83399e8333266dfb10d9447e9ac1d29",
+        "entry_sha256": "c6acc25362d4734964bd30945b2c40c4c7f1ac99c0afe50bee031bb4249a1c4f"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/p03_handoff_snapshots",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "e1c89d2c10e726e837e068dadce3833f7832ac2e26c2ca500fc4b1f77b1f8695",
+        "entry_sha256": "da778dd02f7d68534e2fcf8f0ba1feddcf8cda16267142977907683c507c7d6e"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/permissions",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "98ea56c77ca541f1b4c600b1321d2a6755e60a69c3c46b83460f52b0b4e9061b",
+        "entry_sha256": "013fa1f966eb8562f3d6f3a66e293765cdf8856175bbac355d5f8db6aa745b5f"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/schema_migrations",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "819367dcf5b101978908e53d442e040d972503a77039f9760ce803493ab6b227",
+        "entry_sha256": "2c2121fe5f550d8886a63fa9963aae060f0d63f5b4b6fba613f92bc81ac6896f"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/smart_app_categories",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "de76844a86a381bf308c6a22406d1e54b4895bcca30afba8e307494fa6f5cfc6",
+        "entry_sha256": "a6669423ebd2cd047694e259757646df63faedcd8f7f28f8757156251bc7e21b"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/smart_apps",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "8c01833271bb62c03a144f73f04f5bb8c904ec0badee4e4195df8cd08554cc4a",
+        "entry_sha256": "fccaa4a6c223c0eae4a67020a80ec10d94a60c77bba68865e85de9f3e8577083"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/storage_credit_config",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "cbd5239e8a0e01f6a787c7cca10f50439fb534cd663cf43aad153bf520d986a8",
+        "entry_sha256": "de044daae08fe4fed41b0c335a0d9f4b1f538fd871a00d6b51221f47fdbcfe3a"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/storage_credits_config_simple",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "70d0ba8cbdde66d8dd8c4403c5096b5ffe139dc2173311b4c4eec1d8a1b64c46",
+        "entry_sha256": "f1d931f2349b2df62fbb526fe06eb83f7f78138db67f72ae65788b635301fd96"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/system_modules",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "c76e51b7da336a6f7c5c53051a12319248dfdcb4fd4c6923b56df65284ea3379",
+        "entry_sha256": "0ea74f6b61c194191b64f7bb25486762ffd7bad67a5c6f6b820bc6b516a08f1f"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/system_prompt_groups",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "9427fa984be6006cd4113adeb387a013b62c2c3c7d1edee175528e8d9c5cf0da",
+        "entry_sha256": "bddcc01350e8e08e9c1acb57daeaedce07d9789d939fa283d3e68179460c0205"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/system_prompts",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "f4c9c5ffd103a7ba01a2eb63debc65b153757a40eccd34ed2c0f7b57d8233ca0",
+        "entry_sha256": "611bed2101018a722f813f640d9fb216b5bb5266f55f6d14995b0e234abde0a7"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/system_settings",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "9db753bebddb3be4077c0d6cd5f65f2d6e71bb0a459f6e31833c856da54e8527",
+        "entry_sha256": "6a7def822f583c3abd5c66b48ea2c38abb68ba10729fbcb64128e117c6e40bae"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/teaching_global_authorizations",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "271db677cffab141c7134ef9482e5abb0c90427a0263d5fbcf6a7855621fc2f1",
+        "entry_sha256": "9be90abea78fe4910d3fca4444e90b98fb9b88fa0157bc038e17ff37125255cb"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/teaching_global_authorizations_backup_20251109_122011",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "7d47e1139aab9d4cc63253f1cf2fe540eec5d52345c57840e93c0f51459b367a",
+        "entry_sha256": "e62eb604e201e817f2ca9b097b4a043effc02c180210ec72788ad8557c38859a"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/teaching_lesson_drafts",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "7614148d9dd92c38a308a85c06493ec339eb2444108959e27e6264c4ddbe279f",
+        "entry_sha256": "e3664e4c4d3b745b31264571e946cd1ab983558a390d9dd0035a0e133db17284"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/teaching_lesson_plans",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "5e87273ff92d137ef177527987de63f7c3e76f931f4e68cf2cd676f32e25cce8",
+        "entry_sha256": "4e1ad8ec82028a27d9ebaab488a7bd0de3f8faaefb243201fa6ebf84765913fb"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/teaching_lessons",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "14ade7af8a258b3b0d3300abf707cc5296b8aea031035a7bb6811e9568f1e2f9",
+        "entry_sha256": "bd5ea1a8976823afd8dda2437f8a389dcb348a35157268bad6edc43198213529"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/teaching_module_group_relations",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "f7fe7188babbd6136126959726188956c21316a173c739436c9652c8cd8e1600",
+        "entry_sha256": "e2110907f6d7f28876b467c7f72392545b73b497a402d1327bec343730dd09b5"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/teaching_module_groups",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "38f5528257ee0277e6e151b13ec2459c999b5e52e24f01b97f91824645adad79",
+        "entry_sha256": "4940e4e454481d65e0f01145b4cdc6b1972d198cf7ac86ddafc734a792213171"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/teaching_modules",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "bcf90bb1903b7b6cbf3d5530d6503935e1742b9ecb9e268ce8393b052f5cc51b",
+        "entry_sha256": "ae94ecd7421d0b26005c799ad8180e63c8716d6f7e3b582496592a84c80c23c2"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/teaching_permissions",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "7d4cc6d666064584c30b56236c9b88a9c96ff6751aa97d565fc90a57b72fb855",
+        "entry_sha256": "01dac917632e08b6a587413e7f305eef2e2d302d758ef9c38a8e1a8bb4a7b1d3"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/teaching_permissions_backup_20251031",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "5331d2cbf5f1c0c574c3d82213786c6601921fa8a1e3d3df6abe7032b301d3ac",
+        "entry_sha256": "33643c32deffbb523d97091fe1434af0eada7101d37aeb2ff00a3becb5af73c8"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/teaching_view_logs",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "e1f933f57c525de302b9a561032c329d5d127cc4e7fe4949afc19e1c1f68fe8c",
+        "entry_sha256": "6837af2a8547dae18427c3bc7797a45356389310e8a2f990eca2cbeb0b9e1ce8"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/token_blacklist",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "697f184c1135d1304cb66e4cd3016781e48a0aec9a3db1d8e1167888bc9b783e",
+        "entry_sha256": "09b81bdec659127aebb7195c07fb353b94bc9cff0ce9924a214226bfbc86f2df"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/user_activities",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "3ae5c5ca584e5e0a6be229e6621311da773d5457d66d785ca498bccfc6694aac",
+        "entry_sha256": "cadf69e15e34532598a6d215affba2dcf348d273bc6913c372dace1df6b1227a"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/user_files",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "d6e0a1246ab5150000823f918fee96f0c39b90a1d5ea3e57c6789a7410ef41bd",
+        "entry_sha256": "de53f050cfdc157fd067700aa63ef778a849e174f22c4654022b2efe6d5cf881"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/user_folders",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "1d5d8639e219dafd2e7daeaa3bc060b121611ccc2ba0bf445930ac22a100af7c",
+        "entry_sha256": "bf15984f21b275508e626c0f46939b6828b0819b51cbaf16e1dd6261a53cce7c"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/user_groups",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "5c461f0e0f9aa227b8e13c957b4edd777d23c77437a9caa30a11b51eac580ef3",
+        "entry_sha256": "00a26b3a337a673889395dca02c0d7428654f0b50006ffa045d0b8b7dbf602fb"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/user_mindmaps",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "81f59a8146ea230ff5450b20b4773848994f9501fd0a518dd272b1655a398e6f",
+        "entry_sha256": "ce6295c1e39d6878bb3ce29b9d5583236c1d1305ef812e97c7671001a25cb12f"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/user_model_restrictions",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "95a06621eeb2980ccbb389be26ff26d35d94295bac7a7b82ae566c5657cf2f1a",
+        "entry_sha256": "2c0a93c29decd6dafa6be1d25a6309a580ef754cc1cfc11f228644f7867fc6b5"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/user_sessions",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "bff30fc6e1f1e385c6dffbd47a87a86024dd18b0381a4de8edd8a4bbaf62f1b0",
+        "entry_sha256": "c1c6eda699956725d4f65fbcaa621d792c0d2f0e2d00bcd1716acc86876ec4c2"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/user_smart_app_favorites",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "08dddcf05c1b5bcb2c00570f116f5e238277c66c62ecf76c800a9464aaf4e647",
+        "entry_sha256": "a5a687aae5d2753ec53aa1f0a98adcc0d2cbd3e7f6f6c0133861ba2f1ec6e1b1"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/user_storage",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "a48b9ac988f98c86e56741c298bbcd6e471892cc74ada29b858104cf92a7d2cc",
+        "entry_sha256": "11baf1030a1a146bfeff5dbc70dd1e4e1aa2c76426079346275e8f2d01dc9b0f"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/user_tag_history",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "1bcadc6c6b2655b5855caede5d9d3bbe5c9babbc9eee34d5bc9d4563b696b827",
+        "entry_sha256": "30d23531d76d78b543f38aeadcac9c929cf6d5314746f77800a9d39ae8c2ab16"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/user_tag_relations",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "18471c164a9abef1df13130719538a4b495a5dac57ddbb83b9e2dfd4aaafbc60",
+        "entry_sha256": "99f895ee380e1eddae4d8d0bb450e36a7c5c3f6c45a5dbf0433e1db399585af7"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/user_tags",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "ec943e6fa39f5d93a351592c586f4462290dbcd4cbb3bc95198af5cfec2cc946",
+        "entry_sha256": "1cb2b964396a9c2d270f5e05dc137b878e567ee3eb1e1e556cb3b7885a29cf90"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/users",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "393d51370670400656fdd892e6cde1578f70248473996c4267cf5d895de3bc09",
+        "entry_sha256": "ce04a5048b2b7f430f7bbebacd7552bd42176a7b6bd92bb593a9271e2c6936a4"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/video_generations",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "fee393b6451994839147fbf2e7fc20f906bc91eb373f061a2ec8abf1dda2e97a",
+        "entry_sha256": "6b48cb42dcc3c45a0c19f868b2b7ea1931ec066dd483d4e82940c6520137ff54"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/video_models",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "3228f7dcb4957ae6100ffe82ab7938c82c77c51e46877f01eefbf6e5e3198a2c",
+        "entry_sha256": "30349f19c81ce6d0d8dcd4025d6bcb7bb59284f5b22308e7fa3ae22d9e4a00a3"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/video_safety",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "9ee91305304ea3e961e1f5c80e46c6d2ed089c5fe32e59c61de753e85174b288",
+        "entry_sha256": "1448b038301cacc4ad57d5acc80d2e031fe143258f7e7c799f5f300ad8056cac"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/video_safety_events",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "4292983ec0e08d342c32c9287c94d628fb7f3c8e55ed0dd69f0311d2c218e086",
+        "entry_sha256": "0e2e2c95af16c4c8e281f4c10332c8f3317c20fa15f7c8de7806651a28d0ef1f"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/video_safety_reports",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "d8593a83a73a142fedbe1fec88d86e4233a9b323dfdcfc5cab78aac4acca4521",
+        "entry_sha256": "b4d8e528961572418185a39ba54e6d3aeaaea3c544a19de52bf5f01f235921be"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/wiki_chunks",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "301745664ab13b35d8993ba8a3abc534ab13fb3608476a3be8092931ea487c0d",
+        "entry_sha256": "532ea38c1342a1eef1eaa4bac61d5ab8a16ed622fa1a87f366923f7827d017d8"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/wiki_editors",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "017944ffc66a90e62678641c6ef367159db5d052b0ed5b60066def74d3894264",
+        "entry_sha256": "0c138f464d58c8533bc37849c9b4a39de3c0a6b61cba5916279b7815bdb52e0a"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/wiki_items",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "3e15a0dc7ecaa2581b5f8fc4bc881c7e2b40184cbb675cf214b1840556304772",
+        "entry_sha256": "c17371f022d26a402c00df3c84ca793488044899b506c8ba49bbc8981ef262ca"
+      },
+      {
+        "object_ref": "database://local-mysql/ai_platform_aoci_xingyun_20261116/wiki_versions",
+        "source_id": "local-mysql",
+        "evidence_version": "database-evidence/v1",
+        "table_evidence_sha256": "68c5f019ffb7154d28486e620494c8add26ec3869588cd17ddc6b6479fac027d",
+        "entry_sha256": "e5b263d4447a2b92191621b91bb6f03b55e680689a3f3d3081030fbbde38da67"
+      }
+    ]
   }
 }
