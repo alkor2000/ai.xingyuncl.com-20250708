@@ -63,15 +63,19 @@ async function remote() {
   try {
     if (opts.listGroups) { await listGroups(q, opts); return; }
 
-    // 1. 找组：默认模糊匹配（学校导入遇同名会生成 _2/_3 后缀的组，一起带出来），--exact 则精确匹配
+    // 1. 找组：--group-id 直接按 ID（可逗号分隔多个）；否则按名字，默认模糊匹配（学校导入遇同名会生成 _2/_3 后缀的组，一起带出来），--exact 则精确匹配
     const groups = await q(
-      opts.exact
-        ? 'SELECT id, name, is_active, expire_date, created_at FROM user_groups WHERE name = ? ORDER BY id'
-        : "SELECT id, name, is_active, expire_date, created_at FROM user_groups WHERE name LIKE CONCAT('%', ?, '%') ORDER BY id",
-      [opts.group]
+      opts.groupIds && opts.groupIds.length
+        ? 'SELECT id, name, is_active, expire_date, created_at FROM user_groups WHERE id IN (?) ORDER BY id'
+        : opts.exact
+          ? 'SELECT id, name, is_active, expire_date, created_at FROM user_groups WHERE name = ? ORDER BY id'
+          : "SELECT id, name, is_active, expire_date, created_at FROM user_groups WHERE name LIKE CONCAT('%', ?, '%') ORDER BY id",
+      [opts.groupIds && opts.groupIds.length ? opts.groupIds : opts.group]
     );
     if (!groups.length) {
-      console.error(`[export] 没有名字包含「${opts.group}」的用户组。用 --list-groups 查看所有组名。`);
+      console.error(opts.groupIds && opts.groupIds.length
+        ? `[export] 没有 ID 为 ${opts.groupIds.join(',')} 的用户组。用 --list-groups 查看。`
+        : `[export] 没有名字包含「${opts.group}」的用户组。用 --list-groups 查看所有组名。`);
       process.exit(3);
     }
     const groupIds = groups.map(g => g.id);
@@ -106,7 +110,7 @@ async function remote() {
     const genImgCol = has.has('generated_images') ? 'm.generated_images' : 'NULL';
 
     const meta = {
-      type: 'meta', exported_at: new Date().toISOString(), site: opts.site || null, group_pattern: opts.group, exact: !!opts.exact,
+      type: 'meta', exported_at: new Date().toISOString(), site: opts.site || null, group_pattern: opts.group, group_ids: opts.groupIds || null, exact: !!opts.exact,
       roles: opts.roles === 'all' ? 'all' : 'user', include_deleted: !!opts.includeDeleted,
       groups, counts: { users: n_users, skipped_non_user_accounts: n_skipped_admin, conversations: n_conv, messages: n_msg },
       timezone: '+08:00',

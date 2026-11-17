@@ -6,6 +6,7 @@
 #   dev/export-group-chats.sh practice "某学校"                          # ai.xingyuncl.com（PM2，ssh 别名 practice）
 #   dev/export-group-chats.sh local "某学校"                             # 本地容器库（make db-pull 之后，用来验证脚本）
 #   dev/export-group-chats.sh pku --list-groups [关键词]                 # 只列出组名与人数/会话/消息数，不导出
+#   dev/export-group-chats.sh pku --group-id 12                          # 按 --list-groups 里的组 ID 导（多个用逗号），命令行里不用打中文
 # 选项：
 #   --out DIR            输出目录（默认 ~/ai-platform-exports/<站点>-<组名>-<时间戳>，刻意放在仓库之外）
 #   --exact              组名精确匹配（默认模糊匹配，把学校导入生成的 “_2/_3” 同名后缀组一起带出）
@@ -24,29 +25,32 @@ REMOTE_DIR="${REMOTE_DIR:-/var/www/ai-platform}"
 BACKEND_CONTAINER="${BACKEND_CONTAINER:-ai-platform-backend}"
 
 SITE="${1:-}"; shift || true
-case "$SITE" in pku|practice|local) ;; *) sed -n '2,22p' "$0"; exit 2 ;; esac
+case "$SITE" in pku|practice|local) ;; *) sed -n '2,23p' "$0"; exit 2 ;; esac
 
-GROUP=""; OUT=""; EXACT=0; ROLES=user; INCLUDE_DELETED=0; LIST=0
+GROUP=""; GROUP_IDS=""; OUT=""; EXACT=0; ROLES=user; INCLUDE_DELETED=0; LIST=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --out) OUT="$2"; shift 2 ;;
+    --group-id) GROUP_IDS="$2"; shift 2 ;;
     --exact) EXACT=1; shift ;;
     --roles) ROLES="$2"; shift 2 ;;
     --include-deleted) INCLUDE_DELETED=1; shift ;;
     --list-groups) LIST=1; shift ;;
-    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
     --*) echo "未知选项: $1" >&2; exit 2 ;;
     *) GROUP="$1"; shift ;;
   esac
 done
-if [ "$LIST" != 1 ] && [ -z "$GROUP" ]; then echo "缺少组名（学校名）" >&2; exit 2; fi
+if [ "$LIST" != 1 ] && [ -z "$GROUP" ] && [ -z "$GROUP_IDS" ]; then echo "缺少组名（学校名）或 --group-id" >&2; exit 2; fi
+if [ -n "$GROUP_IDS" ] && ! [[ "$GROUP_IDS" =~ ^[0-9]+(,[0-9]+)*$ ]]; then echo "--group-id 只能是数字，多个用逗号分隔" >&2; exit 2; fi
 case "$ROLES" in user|all) ;; *) echo "--roles 只能是 user 或 all" >&2; exit 2 ;; esac
 
 # 参数打包成 base64 的 JSON：中文组名不经过 ssh/容器的多层 shell 转义
 ARGS_JSON=$(node -e '
-  const [site, group, exact, roles, del, list] = process.argv.slice(1);
-  process.stdout.write(JSON.stringify({ site, group: group || null, exact: exact === "1", roles, includeDeleted: del === "1", listGroups: list === "1" }));
-' "$SITE" "$GROUP" "$EXACT" "$ROLES" "$INCLUDE_DELETED" "$LIST")
+  const [site, group, ids, exact, roles, del, list] = process.argv.slice(1);
+  const groupIds = ids ? ids.split(",").map(Number) : null;
+  process.stdout.write(JSON.stringify({ site, group: group || null, groupIds, exact: exact === "1", roles, includeDeleted: del === "1", listGroups: list === "1" }));
+' "$SITE" "$GROUP" "$GROUP_IDS" "$EXACT" "$ROLES" "$INCLUDE_DELETED" "$LIST")
 B64=$(printf '%s' "$ARGS_JSON" | base64 -w0)
 NODE_ARGS="--mode remote --args-b64 $B64"
 
@@ -71,7 +75,7 @@ if [ "$LIST" = 1 ]; then
   exit 0
 fi
 
-SAFE_GROUP=$(node -e 'process.stdout.write(process.argv[1].replace(/[^\p{L}\p{N}_-]+/gu, "_").slice(0, 40))' "$GROUP")
+SAFE_GROUP=$(node -e 'process.stdout.write((process.argv[1] || ("group" + process.argv[2].replace(/,/g, "_"))).replace(/[^\p{L}\p{N}_-]+/gu, "_").slice(0, 40))' "$GROUP" "$GROUP_IDS")
 OUT="${OUT:-$HOME/ai-platform-exports/${SITE}-${SAFE_GROUP}-$(date +%Y%m%d_%H%M%S)}"
 mkdir -p "$OUT"
 RAW="$OUT/raw.jsonl"

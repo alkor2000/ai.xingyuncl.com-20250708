@@ -290,14 +290,19 @@ class User {
       logger.error('创建用户失败:', error);
       
       if (error.code === 'ER_DUP_ENTRY') {
+        let message;
         if (error.message.includes('uuid')) {
-          throw new ValidationError('该UUID已存在');
+          message = '该UUID已存在';
+        } else if (error.message.includes('email')) {
+          message = '该邮箱已被注册';
+        } else if (error.message.includes('username')) {
+          message = '该用户名已被使用';
         }
-        if (error.message.includes('email')) {
-          throw new ValidationError('该邮箱已被注册');
-        }
-        if (error.message.includes('username')) {
-          throw new ValidationError('该用户名已被使用');
+        if (message) {
+          const validationError = new ValidationError(message);
+          // 保留数据库错误供SSO识别并发创建；对外仍返回原有校验文案。
+          validationError.originalError = error;
+          throw validationError;
         }
       }
       
@@ -334,21 +339,35 @@ class User {
       const randomPassword = crypto.randomBytes(32).toString('hex');
       const email = `${uuid}@sso.local`;
 
-      const newUser = await User.create({
-        uuid,
-        uuid_source: 'sso',
-        email,
-        username,
-        password: randomPassword,
-        phone: null,
-        role: 'user',
-        group_id,
-        status: 'active',
-        remark: `SSO用户 - ${name || 'Unknown'}`,
-        token_quota: 10000,
-        credits_quota: default_credits,
-        credits_expire_days
-      });
+      let newUser;
+      try {
+        newUser = await User.create({
+          uuid,
+          uuid_source: 'sso',
+          email,
+          username,
+          password: randomPassword,
+          phone: null,
+          role: 'user',
+          group_id,
+          status: 'active',
+          remark: `SSO用户 - ${name || 'Unknown'}`,
+          token_quota: 10000,
+          credits_quota: default_credits,
+          credits_expire_days
+        });
+      } catch (error) {
+        // 另一请求可能在本次查询后率先创建同一身份。唯一键是最终防线，
+        // 只按完整uuid重新读取，不能用显示名或截短的用户名认领其他账号。
+        if (error.originalError?.code === 'ER_DUP_ENTRY') {
+          const concurrentUser = await User.findByUUID(uuid);
+          if (concurrentUser) {
+            await concurrentUser.updateLastLogin();
+            return concurrentUser;
+          }
+        }
+        throw error;
+      }
 
       logger.info('SSO用户创建成功', {
         userId: newUser.id,
